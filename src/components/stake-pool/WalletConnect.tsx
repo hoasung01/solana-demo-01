@@ -1,20 +1,26 @@
 'use client';
 
-import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
 
 export function WalletConnect() {
-    const { publicKey } = useWallet();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <div className="flex items-center justify-center">
+                <div className="h-10 w-[200px] animate-pulse rounded-lg bg-gray-200" />
+            </div>
+        );
+    }
 
     return (
-        <div className="flex items-center gap-4">
-            {publicKey ? (
-                <div className="text-sm text-muted-foreground">
-                    Đã kết nối: {publicKey.toString().slice(0, 4)}...{publicKey.toString().slice(-4)}
-                </div>
-            ) : null}
-            <WalletMultiButton className="!bg-primary !text-primary-foreground hover:!bg-primary/90" />
+        <div className="flex items-center justify-center">
+            <WalletMultiButton className="!bg-primary hover:!bg-primary/90" />
         </div>
     );
 }

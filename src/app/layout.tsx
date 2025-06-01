@@ -6,14 +6,14 @@ import { ClientLayout } from '@/components/client-layout';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Solana Stake Pool',
-  description: 'A Solana-based staking application',
+  title: 'Solana Stake Pool Demo',
+  description: 'A demo of Solana stake pool functionality',
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`antialiased ${inter.className}`}>
+      <body className={inter.className} suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
