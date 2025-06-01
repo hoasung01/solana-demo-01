@@ -1,0 +1,22 @@
+[package]
+name = "stake-pool"
+version = "0.1.0"
+edition = "2021"
+description = "A Solana stake pool program for SOL staking"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+solana-program = "1.17"
+borsh = "0.10.3"
+thiserror = "1.0"
+spl-token = { version = "4.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "2.0", features = ["no-entrypoint"] }

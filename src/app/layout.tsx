@@ -1,8 +1,22 @@
+'use client';
+
 import type { Metadata } from 'next'
 import './globals.css'
 import { AppProviders } from '@/components/app-providers'
 import { AppLayout } from '@/components/app-layout'
 import React from 'react'
+import { Inter } from "next/font/google";
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
+import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { clusterApiUrl } from '@solana/web3.js';
+import { Toaster } from "sonner";
+
+// Import styles
+require('@solana/wallet-adapter-react-ui/styles.css');
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'Placeholder',
@@ -15,13 +29,25 @@ const links: { label: string; path: string }[] = [
   { label: 'Account', path: '/account' },
 ]
 
+// Cấu hình network
+const network = WalletAdapterNetwork.Devnet;
+const endpoint = clusterApiUrl(network);
+const wallets = [new PhantomWalletAdapter()];
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`antialiased`}>
-        <AppProviders>
-          <AppLayout links={links}>{children}</AppLayout>
-        </AppProviders>
+      <body className={`antialiased ${inter.className}`}>
+        <ConnectionProvider endpoint={endpoint}>
+          <WalletProvider wallets={wallets} autoConnect>
+            <WalletModalProvider>
+              <AppProviders>
+                <AppLayout links={links}>{children}</AppLayout>
+              </AppProviders>
+              <Toaster />
+            </WalletModalProvider>
+          </WalletProvider>
+        </ConnectionProvider>
       </body>
     </html>
   )
