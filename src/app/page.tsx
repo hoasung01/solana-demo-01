@@ -1,14 +1,17 @@
-import { StakeForm, WalletConnect } from "@/components/stake-pool";
+import { StakeForm, WalletConnect, WalletBalance } from "@/components/stake-pool";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-8">Solana Stake Pool</h1>
-        <div className="flex flex-col items-center gap-8">
+    <main className="container mx-auto p-4">
+      <h1 className="text-4xl font-bold mb-8">Solana Stake Pool</h1>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
           <WalletConnect />
-          <StakeForm />
+          <div className="mt-4">
+            <WalletBalance />
+          </div>
         </div>
+        <StakeForm />
       </div>
     </main>
   );
