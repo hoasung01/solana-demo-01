@@ -1,20 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
+// Địa chỉ stake pool trên devnet (thay thế bằng địa chỉ thực tế của bạn)
+const STAKE_POOL_ADDRESS = 'CFXepqvtoz7oPno4vTvqrVp2Vzt43vUebSJpEaqzGoJA';
+
 export function StakeForm() {
     const { publicKey, sendTransaction } = useWallet();
+    const { connection } = useConnection();
     const [amount, setAmount] = useState<string>('');
     const [loading, setLoading] = useState(false);
-
-    // Kết nối đến Solana network (thay đổi URL tùy theo môi trường)
-    const connection = new Connection('http://localhost:8899', 'confirmed');
 
     const handleStake = async () => {
         if (!publicKey) {
@@ -37,7 +38,7 @@ export function StakeForm() {
             const transaction = new Transaction().add(
                 SystemProgram.transfer({
                     fromPubkey: publicKey,
-                    toPubkey: new PublicKey('YOUR_STAKE_POOL_ADDRESS'), // Thay thế bằng địa chỉ stake pool của bạn
+                    toPubkey: new PublicKey(STAKE_POOL_ADDRESS),
                     lamports,
                 })
             );

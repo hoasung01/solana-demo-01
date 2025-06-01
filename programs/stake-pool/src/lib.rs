@@ -117,7 +117,7 @@ fn process_stake(
 
     // Cập nhật tổng số SOL đã stake
     stake_pool.total_staked = stake_pool.total_staked.checked_add(amount)
-        .ok_or(ProgramError::Overflow)?;
+        .ok_or(ProgramError::Custom(0))?;
 
     // Lưu trạng thái mới
     stake_pool.serialize(&mut *stake_pool_account.data.borrow_mut())?;
@@ -153,7 +153,7 @@ fn process_unstake(
 
     // Cập nhật tổng số SOL đã stake
     stake_pool.total_staked = stake_pool.total_staked.checked_sub(amount)
-        .ok_or(ProgramError::Overflow)?;
+        .ok_or(ProgramError::Custom(0))?;
 
     // Lưu trạng thái mới
     stake_pool.serialize(&mut *stake_pool_account.data.borrow_mut())?;
@@ -181,7 +181,7 @@ fn process_claim_rewards(
     let current_time = solana_program::clock::Clock::get()?.unix_timestamp;
     // Tính thời gian đã trôi qua
     let time_elapsed = current_time.checked_sub(stake_pool.last_update_time)
-        .ok_or(ProgramError::Overflow)?;
+        .ok_or(ProgramError::Custom(0))?;
 
     // Tính lãi
     let rewards = calculate_rewards(stake_pool.total_staked, time_elapsed, stake_pool.reward_rate)?;
