@@ -1,18 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { PublicKey, Transaction, LAMPORTS_PER_SOL, SystemProgram, TransactionInstruction } from '@solana/web3.js';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey, Transaction, LAMPORTS_PER_SOL, ComputeBudgetProgram, SystemProgram, TransactionInstruction, Connection } from '@solana/web3.js';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
-// Địa chỉ stake pool trên devnet
-const STAKE_POOL_ADDRESS = 'CFXepqvtoz7oPno4vTvqrVp2Vzt43vUebSJpEaqzGoJA';
-
-// Địa chỉ token mint (thay thế bằng địa chỉ thực tế của bạn)
-const TOKEN_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+// Địa chỉ program trên devnet
+export const PROGRAM_ID = new PublicKey("AH6kLi3PTnRqEqFpNELtBPgnyhdZZSeMeowqPK9aGQ4W");
 
 // Định nghĩa kiểu lỗi
 interface WalletError extends Error {
@@ -20,20 +17,457 @@ interface WalletError extends Error {
     code?: number;
 }
 
+// Định nghĩa kiểu lỗi rate limit
+interface RateLimitError extends Error {
+    code?: number;
+    message: string;
+}
+
+// Định nghĩa instruction data theo smart contract
+enum StakePoolInstruction {
+    Initialize = 0,
+    Stake = 1,
+    Unstake = 2,
+    ClaimRewards = 3,
+}
+
+// Hàm tạo instruction data
+function createInstructionData(instruction: StakePoolInstruction, amount?: number): Buffer {
+    // Tạo buffer với kích thước phù hợp
+    const data = Buffer.alloc(amount !== undefined ? 9 : 1);
+
+    // Ghi instruction byte
+    data.writeUInt8(instruction, 0);
+
+    // Nếu có amount, ghi vào 8 bytes tiếp theo
+    if (amount !== undefined) {
+        // Chuyển đổi amount thành 8 bytes little-endian
+        for (let i = 0; i < 8; i++) {
+            data[i + 1] = (amount >> (i * 8)) & 0xff;
+        }
+    }
+
+    return data;
+}
+
+// Cấu hình RPC endpoints
+const RPC_ENDPOINTS = [
+    'https://api.devnet.solana.com',
+    'https://devnet.solana.rpcpool.com',
+    'https://devnet.genesysgo.net',
+    'https://devnet.api.rpcpool.com',
+    'https://devnet.helius-rpc.com/?api-key=YOUR-API-KEY'  // Bạn cần thay YOUR-API-KEY bằng API key thật
+];
+
+// Hàm tạo connection với endpoint
+function createConnection(endpoint: string) {
+    console.log('Creating connection to:', endpoint);
+    const connection = new Connection(endpoint, {
+        commitment: 'processed',
+        confirmTransactionInitialTimeout: 180000,
+        httpHeaders: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Origin': window.location.origin,
+            'Referer': window.location.href
+        },
+        disableRetryOnRateLimit: false
+    });
+
+    // Override các phương thức sử dụng WebSocket
+    connection.getLatestBlockhash = async (commitment) => {
+        const maxRetries = 3;
+        let lastError: Error | null = null;
+
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                console.log(`Getting latest blockhash (attempt ${i + 1}/${maxRetries})...`);
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Origin': window.location.origin,
+                        'Referer': window.location.href
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getLatestBlockhash',
+                        params: [{
+                            commitment: commitment || 'confirmed'
+                        }]
+                    }),
+                    signal: controller.signal,
+                    mode: 'cors',
+                    credentials: 'omit',
+                    cache: 'no-cache'
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Blockhash response:', data);
+
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+
+                if (!data.result || !data.result.value || !data.result.value.blockhash) {
+                    throw new Error('Invalid blockhash response');
+                }
+
+                return {
+                    blockhash: data.result.value.blockhash,
+                    lastValidBlockHeight: data.result.value.lastValidBlockHeight
+                };
+            } catch (error) {
+                lastError = error as Error;
+                console.error(`Attempt ${i + 1} failed:`, error);
+
+                if (i < maxRetries - 1) {
+                    const delay = Math.min(1000 * Math.pow(2, i), 10000);
+                    console.log(`Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        throw lastError || new Error('Failed to get latest blockhash after retries');
+    };
+
+    return connection;
+}
+
+// Hàm kiểm tra kết nối internet
+async function checkInternetConnection(): Promise<boolean> {
+    try {
+        console.log('Checking internet connection...');
+
+        // Kiểm tra trạng thái online của trình duyệt
+        if (!navigator.onLine) {
+            console.log('Browser reports offline status');
+            return false;
+        }
+
+        // Thử kết nối đến Solana devnet
+        try {
+            console.log('Trying to connect to Solana devnet...');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            console.log('Sending health check request...');
+            const response = await fetch('https://api.devnet.solana.com', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'getHealth'
+                }),
+                signal: controller.signal,
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'no-cache'
+            });
+
+            clearTimeout(timeoutId);
+            console.log('Response status:', response.status);
+            console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+            if (!response.ok) {
+                console.error('Health check failed with status:', response.status);
+                return false;
+            }
+
+            const data = await response.json();
+            console.log('Health check response:', data);
+            return true;
+        } catch (error) {
+            console.error('Failed to connect to Solana devnet:', error);
+            if (error instanceof Error) {
+                console.error('Error name:', error.name);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+            }
+            return false;
+        }
+    } catch (error) {
+        console.error('Connection check failed with error:', error);
+        if (error instanceof Error) {
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+        }
+        return false;
+    }
+}
+
+// Hàm kiểm tra lỗi rate limit
+function isRateLimitError(error: unknown): error is RateLimitError {
+    const err = error as RateLimitError;
+    return err?.message?.includes('rate limit') ||
+           err?.message?.includes('429') ||
+           err?.code === 429;
+}
+
+// Hàm kiểm tra kết nối với retry
+async function checkConnectionWithFallback(): Promise<Connection> {
+    let lastError: Error | null = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+        console.log(`Connection attempt ${retryCount + 1}/${maxRetries}`);
+
+        // Kiểm tra kết nối internet trước
+        const isConnected = await checkInternetConnection();
+        if (!isConnected) {
+            console.log('Internet connection check failed');
+            throw new Error('Không có kết nối internet. Vui lòng kiểm tra lại kết nối của bạn.');
+        }
+
+        for (const endpoint of RPC_ENDPOINTS) {
+            try {
+                console.log(`Trying to connect to Solana devnet at ${endpoint}...`);
+                const testConnection = createConnection(endpoint);
+
+                // Thử lấy block height với timeout
+                console.log('Getting block height...');
+                const blockHeightPromise = testConnection.getBlockHeight();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout')), 30000)
+                );
+
+                const blockHeight = await Promise.race([blockHeightPromise, timeoutPromise]);
+                console.log(`Successfully connected to Solana devnet at ${endpoint} - Block Height: ${blockHeight}`);
+
+                // Nếu kết nối thành công, trả về connection ngay lập tức
+                return testConnection;
+            } catch (error) {
+                lastError = error as Error;
+                console.error(`Failed to connect to ${endpoint}:`, error);
+                if (error instanceof Error) {
+                    console.error('Error name:', error.name);
+                    console.error('Error message:', error.message);
+                    console.error('Error stack:', error.stack);
+                }
+            }
+        }
+
+        retryCount++;
+        if (retryCount < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+            console.log(`Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+
+    console.error('All connection attempts failed:', lastError);
+    throw new Error(`Không thể kết nối đến Solana devnet sau ${maxRetries} lần thử. Lỗi: ${lastError?.message}`);
+}
+
+// Hàm retry với xử lý rate limit
+async function retry<T>(
+    fn: () => Promise<T>,
+    connection: Connection,
+    retries: number = 3,
+    delay: number = 1000,
+    timeout: number = 10000
+): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let i = 0; i < retries; i++) {
+        try {
+            // Tạo promise với timeout
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Request timeout')), timeout);
+            });
+
+            // Race giữa fn() và timeout
+            const result = await Promise.race([fn(), timeoutPromise]);
+            return result;
+        } catch (error) {
+            lastError = error as Error;
+            console.error(`Attempt ${i + 1} failed:`, error);
+
+            // Nếu là lỗi rate limit, tăng thời gian chờ
+            if (isRateLimitError(error)) {
+                const rateLimitDelay = Math.min(2000 * Math.pow(2, i), 10000);
+                console.log(`Rate limit hit, waiting ${rateLimitDelay}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, rateLimitDelay));
+                continue;
+            }
+
+            if (i < retries - 1) {
+                const backoffDelay = Math.min(delay * Math.pow(2, i), 10000);
+                console.log(`Retrying in ${backoffDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            }
+        }
+    }
+
+    throw lastError || new Error('Failed after retries');
+}
+
+// Hàm xác nhận transaction với retry
+const confirmTransactionWithRetry = async (
+    connection: Connection,
+    signature: string,
+    maxRetries = 5
+): Promise<boolean> => {
+    let retries = 0;
+    let lastError: Error | null = null;
+
+    while (retries < maxRetries) {
+        try {
+            console.log(`Confirmation attempt ${retries + 1}...`);
+
+            // Get the latest blockhash with confirmed commitment
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash({
+                commitment: 'confirmed'
+            });
+
+            // Use confirmed commitment for more reliable confirmation
+            const confirmation = await connection.confirmTransaction({
+                signature,
+                blockhash,
+                lastValidBlockHeight
+            }, 'confirmed');
+
+            if (confirmation.value.err) {
+                throw new Error(`Transaction failed: ${confirmation.value.err}`);
+            }
+
+            console.log('Transaction confirmed:', confirmation);
+            return true;
+        } catch (error) {
+            lastError = error as Error;
+            console.error(`Confirmation attempt ${retries + 1} failed:`, error);
+
+            // If it's a block height error, try to get transaction status
+            if (error instanceof Error && error.message?.includes('block height exceeded')) {
+                console.log('Block height exceeded, checking transaction status...');
+
+                try {
+                    // Try to get transaction status with a longer timeout
+                    const txStatus = await Promise.race([
+                        connection.getSignatureStatus(signature, {
+                            searchTransactionHistory: true
+                        }),
+                        new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('Status check timeout')), 30000)
+                        )
+                    ]) as { value: { err: { code: number; message: string } | null; confirmationStatus: string } | null } | null;
+
+                    if (txStatus?.value?.err) {
+                        throw new Error(`Transaction failed: ${txStatus.value.err.message}`);
+                    }
+
+                    // If we can get the status but it's not confirmed, wait a bit longer
+                    if (txStatus?.value?.confirmationStatus === 'processed') {
+                        console.log('Transaction is processed, waiting for confirmation...');
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                        continue;
+                    }
+                } catch (statusError) {
+                    console.error('Failed to get transaction status:', statusError);
+                }
+            }
+
+            retries++;
+            if (retries < maxRetries) {
+                // Increase delay between retries
+                const delay = Math.min(2000 * Math.pow(2, retries), 30000);
+                console.log(`Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+
+    throw new Error(`Failed to confirm transaction after ${maxRetries} attempts. Last error: ${lastError?.message}`);
+};
+
 export function StakeForm() {
     const { publicKey, sendTransaction } = useWallet();
-    const { connection } = useConnection();
+    const [connection, setConnection] = useState<Connection | null>(null);
     const [amount, setAmount] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [isClient, setIsClient] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
+    const [isOnline, setIsOnline] = useState(true);
 
     useEffect(() => {
         setIsClient(true);
     }, []);
 
+    // Thêm useEffect để kiểm tra trạng thái kết nối
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOnline(true);
+            // Thử kết nối lại khi có internet
+            checkInitialConnection();
+        };
+        const handleOffline = () => {
+            setIsOnline(false);
+            setIsConnected(false);
+            toast.error('Mất kết nối internet. Vui lòng kiểm tra lại kết nối của bạn.');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        // Kiểm tra trạng thái ban đầu
+        setIsOnline(navigator.onLine);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    // Hàm kiểm tra kết nối ban đầu
+    const checkInitialConnection = async () => {
+        if (!isOnline) {
+            toast.error('Không có kết nối internet. Vui lòng kiểm tra lại kết nối của bạn.');
+            return;
+        }
+
+        try {
+            const newConnection = await checkConnectionWithFallback();
+            setConnection(newConnection);
+            setIsConnected(true);
+            toast.success('Đã kết nối đến Solana devnet');
+        } catch (error) {
+            console.error('Failed to establish initial connection:', error);
+            toast.error('Không thể kết nối đến Solana devnet. Vui lòng thử lại sau.');
+            setIsConnected(false);
+        }
+    };
+
+    // Cập nhật useEffect kiểm tra kết nối ban đầu
+    useEffect(() => {
+        checkInitialConnection();
+    }, [isOnline]);
+
     const handleStake = async () => {
         if (!publicKey) {
             toast.error('Vui lòng kết nối ví');
+            return;
+        }
+
+        if (!connection || !isConnected) {
+            toast.error('Đang mất kết nối đến Solana devnet. Vui lòng thử lại sau.');
             return;
         }
 
@@ -48,120 +482,150 @@ export function StakeForm() {
             // Chuyển đổi SOL sang lamports
             const lamports = Number(amount) * LAMPORTS_PER_SOL;
 
-            // Kiểm tra số dư
-            const balance = await connection.getBalance(publicKey);
-            console.log('Current balance:', balance / LAMPORTS_PER_SOL, 'SOL');
-
+            // Kiểm tra số dư với retry
+            const balance = await retry(
+                () => connection.getBalance(publicKey),
+                connection
+            );
             if (balance < lamports) {
                 throw new Error(`Số dư không đủ. Cần ${amount} SOL nhưng chỉ có ${balance / LAMPORTS_PER_SOL} SOL`);
             }
 
-            // Import borsh dynamically
-            const borsh = await import('borsh');
+            // Tạo PDA cho stake pool
+            const [stakePoolPda] = PublicKey.findProgramAddressSync(
+                [Buffer.from('stake_pool')],
+                PROGRAM_ID
+            );
 
-            // Định nghĩa cấu trúc dữ liệu cho instruction
-            class StakeInstruction {
-                amount: number;
-                constructor(amount: number) {
-                    this.amount = amount;
+            // Kiểm tra và khởi tạo stake pool nếu cần
+            const stakePoolInfo = await retry(
+                () => connection.getAccountInfo(stakePoolPda),
+                connection
+            );
+
+            // Get blockhash with confirmed commitment
+            const { blockhash, lastValidBlockHeight } = await retry(
+                () => connection.getLatestBlockhash('confirmed'),
+                connection
+            );
+
+            console.log('Got blockhash:', blockhash);
+
+            if (!stakePoolInfo) {
+                // Nếu chưa có pool, chỉ gửi transaction khởi tạo pool
+                const instructions = [];
+
+                // Thêm compute budget instruction
+                const modifyComputeUnits = ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 });
+                instructions.push(modifyComputeUnits);
+
+                const createAccountInstruction = SystemProgram.createAccount({
+                    fromPubkey: publicKey,
+                    newAccountPubkey: stakePoolPda,
+                    lamports: await retry(
+                        () => connection.getMinimumBalanceForRentExemption(24),
+                        connection
+                    ),
+                    space: 24,
+                    programId: PROGRAM_ID,
+                });
+                instructions.push(createAccountInstruction);
+
+                const initData = createInstructionData(StakePoolInstruction.Initialize);
+                const initIx = new TransactionInstruction({
+                    programId: PROGRAM_ID,
+                    keys: [
+                        { pubkey: stakePoolPda, isSigner: false, isWritable: true },
+                        { pubkey: publicKey, isSigner: true, isWritable: true },
+                    ],
+                    data: initData,
+                });
+                instructions.push(initIx);
+
+                // Tạo transaction thông thường
+                const transaction = new Transaction();
+                transaction.feePayer = publicKey;
+                transaction.recentBlockhash = blockhash;
+                transaction.lastValidBlockHeight = lastValidBlockHeight;
+
+                // Thêm tất cả instructions
+                instructions.forEach(ix => transaction.add(ix));
+
+                try {
+                    console.log('Sending transaction with blockhash:', blockhash);
+                    const signature = await sendTransaction(transaction, connection);
+                    console.log('Transaction sent with signature:', signature);
+
+                    // Đợi transaction được xác nhận với retry
+                    const confirmed = await confirmTransactionWithRetry(connection, signature);
+                    if (confirmed) {
+                        toast.success('Khởi tạo pool thành công! Hãy stake lại.');
+                        setAmount('');
+                    }
+                } catch (error) {
+                    console.error('Transaction error:', error);
+                    throw error;
                 }
             }
 
-            // Schema cho instruction
-            const stakeSchema = {
-                struct: {
-                    amount: 'u64',
-                },
-            };
+            // Nếu pool đã tồn tại, thực hiện stake như cũ
+            const instructions = [];
 
-            // Tạo instruction data
-            const instruction = new StakeInstruction(lamports);
-            const instructionData = borsh.serialize(stakeSchema, instruction);
+            // Thêm compute budget instruction
+            const modifyComputeUnits = ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 });
+            instructions.push(modifyComputeUnits);
 
-            // Tạo transaction
-            const transaction = new Transaction();
-
-            // Thêm transfer instruction
+            // Thêm instruction chuyển SOL
             const transferInstruction = SystemProgram.transfer({
                 fromPubkey: publicKey,
-                toPubkey: new PublicKey(STAKE_POOL_ADDRESS),
-                lamports,
+                toPubkey: stakePoolPda,
+                lamports: lamports
             });
-            transaction.add(transferInstruction);
+            instructions.push(transferInstruction);
 
-            // Thêm stake instruction
-            const stakeInstruction: TransactionInstruction = {
+            const stakeData = createInstructionData(StakePoolInstruction.Stake, lamports);
+            const stakeIx = new TransactionInstruction({
+                programId: PROGRAM_ID,
                 keys: [
+                    { pubkey: stakePoolPda, isSigner: false, isWritable: true },
                     { pubkey: publicKey, isSigner: true, isWritable: true },
-                    { pubkey: new PublicKey(STAKE_POOL_ADDRESS), isSigner: false, isWritable: true },
-                    { pubkey: TOKEN_MINT, isSigner: false, isWritable: true },
-                    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                 ],
-                programId: new PublicKey(STAKE_POOL_ADDRESS),
-                data: Buffer.from(instructionData),
-            };
-            transaction.add(stakeInstruction);
-
-            // Log transaction details
-            console.log('Transaction details:', {
-                instructions: transaction.instructions.map(ix => ({
-                    programId: ix.programId.toBase58(),
-                    keys: ix.keys.map(k => ({
-                        pubkey: k.pubkey.toBase58(),
-                        isSigner: k.isSigner,
-                        isWritable: k.isWritable,
-                    })),
-                    data: ix.data.toString('hex'),
-                })),
+                data: stakeData,
             });
+            instructions.push(stakeIx);
 
-            // Lấy recent blockhash
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            // Tạo transaction thông thường
+            const transaction = new Transaction();
+            transaction.feePayer = publicKey;
             transaction.recentBlockhash = blockhash;
             transaction.lastValidBlockHeight = lastValidBlockHeight;
-            transaction.feePayer = publicKey;
 
-            // Log transaction trước khi gửi
-            console.log('Transaction before sending:', {
-                recentBlockhash: transaction.recentBlockhash,
-                lastValidBlockHeight: transaction.lastValidBlockHeight,
-                feePayer: transaction.feePayer?.toBase58(),
-            });
+            // Thêm tất cả instructions
+            instructions.forEach(ix => transaction.add(ix));
 
-            // Gửi transaction
-            const signature = await sendTransaction(transaction, connection);
+            try {
+                console.log('Sending transaction with blockhash:', blockhash);
+                const signature = await sendTransaction(transaction, connection);
+                console.log('Transaction sent with signature:', signature);
 
-            // Log transaction signature
-            console.log('Transaction signature:', signature);
-
-            // Đợi transaction được xác nhận
-            const confirmation = await connection.confirmTransaction({
-                signature,
-                blockhash,
-                lastValidBlockHeight
-            });
-
-            // Log transaction confirmation
-            console.log('Transaction confirmation:', confirmation);
-
-            if (confirmation.value.err) {
-                throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                // Đợi transaction được xác nhận với retry
+                const confirmed = await confirmTransactionWithRetry(connection, signature);
+                if (confirmed) {
+                    toast.success('Stake thành công!');
+                    setAmount('');
+                }
+            } catch (error) {
+                console.error('Transaction error:', error);
+                throw error;
             }
-
-            toast.success('Stake thành công!');
-            setAmount('');
         } catch (error) {
             const walletError = error as WalletError;
-            console.error('Error details:', {
-                name: walletError.name,
-                message: walletError.message,
-                stack: walletError.stack,
-                cause: walletError.cause,
-                code: walletError.code,
-                logs: walletError.logs,
-            });
-
-            toast.error(`Có lỗi xảy ra khi stake: ${walletError.message || 'Không xác định'}`);
+            let errorMessage = 'Có lỗi xảy ra khi stake';
+            if (walletError.message) {
+                errorMessage += `: ${walletError.message}`;
+            }
+            console.error('Stake error:', error);
+            toast.error(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -180,86 +644,19 @@ export function StakeForm() {
 
         try {
             setLoading(true);
-
-            // Import borsh dynamically
-            const borsh = await import('borsh');
-
-            // Định nghĩa cấu trúc dữ liệu cho instruction
-            class StakeInstruction {
-                amount: number;
-                constructor(amount: number) {
-                    this.amount = amount;
-                }
-            }
-
-            // Schema cho instruction
-            const stakeSchema = {
-                struct: {
-                    amount: 'u64',
-                },
-            };
-
-            // Tạo instruction data cho unstake
-            const instruction = new StakeInstruction(Number(amount) * LAMPORTS_PER_SOL);
-            const instructionData = borsh.serialize(stakeSchema, instruction);
-
-            // Tạo transaction
-            const transaction = new Transaction().add({
-                keys: [
-                    { pubkey: publicKey, isSigner: true, isWritable: true },
-                    { pubkey: new PublicKey(STAKE_POOL_ADDRESS), isSigner: false, isWritable: true },
-                    { pubkey: TOKEN_MINT, isSigner: false, isWritable: true },
-                    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-                ],
-                programId: new PublicKey(STAKE_POOL_ADDRESS),
-                data: Buffer.from(instructionData),
-            });
-
-            // Log transaction details
-            console.log('Transaction details:', {
-                instructions: transaction.instructions.map(ix => ({
-                    programId: ix.programId.toBase58(),
-                    keys: ix.keys.map(k => ({
-                        pubkey: k.pubkey.toBase58(),
-                        isSigner: k.isSigner,
-                        isWritable: k.isWritable,
-                    })),
-                    data: ix.data.toString('hex'),
-                })),
-            });
-
-            // Gửi transaction
-            const signature = await sendTransaction(transaction, connection);
-
-            // Log transaction signature
-            console.log('Transaction signature:', signature);
-
-            // Đợi transaction được xác nhận
-            const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-
-            // Log transaction confirmation
-            console.log('Transaction confirmation:', confirmation);
-
-            if (confirmation.value.err) {
-                throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-            }
-
-            toast.success('Unstake thành công!');
-            setAmount('');
-        } catch (error: any) {
+            toast.error('Chức năng unstake chưa được triển khai');
+        } catch (error) {
+            const walletError = error as WalletError;
             console.error('Error details:', {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-                cause: error.cause,
+                name: walletError.name,
+                message: walletError.message,
+                stack: walletError.stack,
+                cause: walletError.cause,
+                code: walletError.code,
+                logs: walletError.logs,
             });
 
-            // Log additional error information if available
-            if (error.logs) {
-                console.error('Transaction logs:', error.logs);
-            }
-
-            toast.error(`Có lỗi xảy ra khi unstake: ${error.message}`);
+            toast.error(`Có lỗi xảy ra khi unstake: ${walletError.message || 'Không xác định'}`);
         } finally {
             setLoading(false);
         }
@@ -273,85 +670,19 @@ export function StakeForm() {
 
         try {
             setLoading(true);
-
-            // Import borsh dynamically
-            const borsh = await import('borsh');
-
-            // Định nghĩa cấu trúc dữ liệu cho instruction
-            class StakeInstruction {
-                amount: number;
-                constructor(amount: number) {
-                    this.amount = amount;
-                }
-            }
-
-            // Schema cho instruction
-            const stakeSchema = {
-                struct: {
-                    amount: 'u64',
-                },
-            };
-
-            // Tạo instruction data cho claim rewards
-            const instruction = new StakeInstruction(0); // amount = 0 cho claim rewards
-            const instructionData = borsh.serialize(stakeSchema, instruction);
-
-            // Tạo transaction
-            const transaction = new Transaction().add({
-                keys: [
-                    { pubkey: publicKey, isSigner: true, isWritable: true },
-                    { pubkey: new PublicKey(STAKE_POOL_ADDRESS), isSigner: false, isWritable: true },
-                    { pubkey: TOKEN_MINT, isSigner: false, isWritable: true },
-                    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-                ],
-                programId: new PublicKey(STAKE_POOL_ADDRESS),
-                data: Buffer.from(instructionData),
-            });
-
-            // Log transaction details
-            console.log('Transaction details:', {
-                instructions: transaction.instructions.map(ix => ({
-                    programId: ix.programId.toBase58(),
-                    keys: ix.keys.map(k => ({
-                        pubkey: k.pubkey.toBase58(),
-                        isSigner: k.isSigner,
-                        isWritable: k.isWritable,
-                    })),
-                    data: ix.data.toString('hex'),
-                })),
-            });
-
-            // Gửi transaction
-            const signature = await sendTransaction(transaction, connection);
-
-            // Log transaction signature
-            console.log('Transaction signature:', signature);
-
-            // Đợi transaction được xác nhận
-            const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-
-            // Log transaction confirmation
-            console.log('Transaction confirmation:', confirmation);
-
-            if (confirmation.value.err) {
-                throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-            }
-
-            toast.success('Nhận lãi thành công!');
-        } catch (error: any) {
+            toast.error('Chức năng nhận lãi chưa được triển khai');
+        } catch (error) {
+            const walletError = error as WalletError;
             console.error('Error details:', {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-                cause: error.cause,
+                name: walletError.name,
+                message: walletError.message,
+                stack: walletError.stack,
+                cause: walletError.cause,
+                code: walletError.code,
+                logs: walletError.logs,
             });
 
-            // Log additional error information if available
-            if (error.logs) {
-                console.error('Transaction logs:', error.logs);
-            }
-
-            toast.error(`Có lỗi xảy ra khi nhận lãi: ${error.message}`);
+            toast.error(`Có lỗi xảy ra khi nhận lãi: ${walletError.message || 'Không xác định'}`);
         } finally {
             setLoading(false);
         }

@@ -13,11 +13,54 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use spl_token::state::Account as TokenAccount;
 
 /// Cấu trúc dữ liệu lưu trữ thông tin của Stake Pool
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Debug)]
 pub struct StakePool {
     pub total_staked: u64,        // Tổng số SOL đã stake
     pub reward_rate: u64,         // Tỷ lệ lãi suất hàng năm (%)
     pub last_update_time: i64,    // Thời điểm cập nhật lãi cuối cùng
+}
+
+impl StakePool {
+    pub const LEN: usize = 8 + 8 + 8; // u64 + u64 + i64
+
+    pub fn new() -> Self {
+        Self {
+            total_staked: 0,
+            reward_rate: 5,
+            last_update_time: 0,
+        }
+    }
+
+    pub fn serialize(&self, data: &mut [u8]) -> ProgramResult {
+        if data.len() < Self::LEN {
+            return Err(ProgramError::AccountDataTooSmall);
+        }
+
+        // Serialize total_staked (u64)
+        data[0..8].copy_from_slice(&self.total_staked.to_le_bytes());
+        // Serialize reward_rate (u64)
+        data[8..16].copy_from_slice(&self.reward_rate.to_le_bytes());
+        // Serialize last_update_time (i64)
+        data[16..24].copy_from_slice(&self.last_update_time.to_le_bytes());
+
+        Ok(())
+    }
+
+    pub fn deserialize(data: &[u8]) -> Result<Self, ProgramError> {
+        if data.len() < Self::LEN {
+            return Err(ProgramError::AccountDataTooSmall);
+        }
+
+        let total_staked = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        let reward_rate = u64::from_le_bytes(data[8..16].try_into().unwrap());
+        let last_update_time = i64::from_le_bytes(data[16..24].try_into().unwrap());
+
+        Ok(Self {
+            total_staked,
+            reward_rate,
+            last_update_time,
+        })
+    }
 }
 
 /// Các lệnh có thể thực hiện với Stake Pool
@@ -39,27 +82,44 @@ pub fn process_instruction(
     instruction_data: &[u8],       // Dữ liệu lệnh
 ) -> ProgramResult {
     // Phân tích lệnh từ dữ liệu đầu vào
-    let instruction = StakePoolInstruction::try_from_slice(instruction_data)?;
+    if instruction_data.is_empty() {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
+    let instruction = instruction_data[0];
+    let amount = if instruction_data.len() > 1 {
+        let mut amount_bytes = [0u8; 8];
+        amount_bytes.copy_from_slice(&instruction_data[1..9]);
+        u64::from_le_bytes(amount_bytes)
+    } else {
+        0
+    };
 
     // Xử lý từng loại lệnh
     match instruction {
-        StakePoolInstruction::Initialize => {
+        0 => {
             msg!("Instruction: Initialize");
             process_initialize(program_id, accounts)
         }
-        StakePoolInstruction::Stake { amount } => {
+        1 => {
             msg!("Instruction: Stake");
             process_stake(program_id, accounts, amount)
         }
-        StakePoolInstruction::Unstake { amount } => {
+        2 => {
             msg!("Instruction: Unstake");
             process_unstake(program_id, accounts, amount)
         }
-        StakePoolInstruction::ClaimRewards => {
+        3 => {
             msg!("Instruction: Claim Rewards");
             process_claim_rewards(program_id, accounts)
         }
+        _ => Err(ProgramError::InvalidInstructionData),
     }
+}
+
+/// Tìm PDA cho stake pool
+pub fn find_stake_pool_address(program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"stake_pool"], program_id)
 }
 
 /// Khởi tạo Stake Pool mới
@@ -70,20 +130,23 @@ fn process_initialize(
     let account_info_iter = &mut accounts.iter();
     let stake_pool_account = next_account_info(account_info_iter)?;
 
+    // Kiểm tra xem đây có phải là PDA của stake pool không
+    let (expected_stake_pool, _) = find_stake_pool_address(program_id);
+    if stake_pool_account.key != &expected_stake_pool {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
     // Kiểm tra quyền sở hữu tài khoản
     if stake_pool_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
 
     // Tạo stake pool mới với các giá trị ban đầu
-    let stake_pool = StakePool {
-        total_staked: 0,          // Chưa có SOL nào được stake
-        reward_rate: 5,           // Lãi suất 5% mỗi năm
-        last_update_time: 0,      // Thời điểm bắt đầu
-    };
+    let stake_pool = StakePool::new();
 
     // Lưu dữ liệu vào tài khoản
-    stake_pool.serialize(&mut *stake_pool_account.data.borrow_mut())?;
+    let mut data = stake_pool_account.data.borrow_mut();
+    stake_pool.serialize(&mut data)?;
     Ok(())
 }
 
@@ -97,13 +160,20 @@ fn process_stake(
     let stake_pool_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
 
+    // Kiểm tra xem đây có phải là PDA của stake pool không
+    let (expected_stake_pool, _) = find_stake_pool_address(program_id);
+    if stake_pool_account.key != &expected_stake_pool {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
     // Kiểm tra quyền sở hữu
     if stake_pool_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
 
     // Đọc thông tin stake pool hiện tại
-    let mut stake_pool = StakePool::try_from_slice(&stake_pool_account.data.borrow())?;
+    let data = stake_pool_account.data.borrow();
+    let mut stake_pool = StakePool::deserialize(&data)?;
 
     // Chuyển SOL từ người dùng vào stake pool
     invoke(
@@ -120,7 +190,8 @@ fn process_stake(
         .ok_or(ProgramError::Custom(0))?;
 
     // Lưu trạng thái mới
-    stake_pool.serialize(&mut *stake_pool_account.data.borrow_mut())?;
+    let mut data = stake_pool_account.data.borrow_mut();
+    stake_pool.serialize(&mut data)?;
     Ok(())
 }
 
@@ -134,13 +205,20 @@ fn process_unstake(
     let stake_pool_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
 
+    // Kiểm tra xem đây có phải là PDA của stake pool không
+    let (expected_stake_pool, _) = find_stake_pool_address(program_id);
+    if stake_pool_account.key != &expected_stake_pool {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
     // Kiểm tra quyền sở hữu
     if stake_pool_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
 
     // Đọc thông tin stake pool hiện tại
-    let mut stake_pool = StakePool::try_from_slice(&stake_pool_account.data.borrow())?;
+    let data = stake_pool_account.data.borrow();
+    let mut stake_pool = StakePool::deserialize(&data)?;
 
     // Kiểm tra số dư đủ
     if stake_pool.total_staked < amount {
@@ -156,7 +234,8 @@ fn process_unstake(
         .ok_or(ProgramError::Custom(0))?;
 
     // Lưu trạng thái mới
-    stake_pool.serialize(&mut *stake_pool_account.data.borrow_mut())?;
+    let mut data = stake_pool_account.data.borrow_mut();
+    stake_pool.serialize(&mut data)?;
     Ok(())
 }
 
@@ -169,13 +248,20 @@ fn process_claim_rewards(
     let stake_pool_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
 
+    // Kiểm tra xem đây có phải là PDA của stake pool không
+    let (expected_stake_pool, _) = find_stake_pool_address(program_id);
+    if stake_pool_account.key != &expected_stake_pool {
+        return Err(ProgramError::InvalidAccountData);
+    }
+
     // Kiểm tra quyền sở hữu
     if stake_pool_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
 
     // Đọc thông tin stake pool hiện tại
-    let mut stake_pool = StakePool::try_from_slice(&stake_pool_account.data.borrow())?;
+    let data = stake_pool_account.data.borrow();
+    let mut stake_pool = StakePool::deserialize(&data)?;
 
     // Lấy thời gian hiện tại
     let current_time = solana_program::clock::Clock::get()?.unix_timestamp;
@@ -195,7 +281,8 @@ fn process_claim_rewards(
     // Cập nhật thời gian tính lãi cuối cùng
     stake_pool.last_update_time = current_time;
     // Lưu trạng thái mới
-    stake_pool.serialize(&mut *stake_pool_account.data.borrow_mut())?;
+    let mut data = stake_pool_account.data.borrow_mut();
+    stake_pool.serialize(&mut data)?;
     Ok(())
 }
 

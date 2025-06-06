@@ -38,7 +38,137 @@ from the creators of Next.js.
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for
 more details.
 
-# Solana Stake Pool Demo
+# Solana Staking Demo
+
+Ứng dụng demo về staking SOL sử dụng Solana blockchain.
+
+## Yêu cầu hệ thống
+
+- Node.js 16+
+- Solana CLI tools
+- Wallet adapter (Phantom, Solflare, etc.)
+
+## Cài đặt
+
+1. Clone repository:
+```bash
+git clone <repository-url>
+cd solana-demo-01
+```
+
+2. Cài đặt dependencies:
+```bash
+npm install
+```
+
+## Thiết lập Local Validator
+
+Để phát triển và test ứng dụng, chúng ta sẽ sử dụng Solana local validator thay vì devnet. Điều này giúp:
+- Phát triển và test nhanh hơn
+- Không bị giới hạn bởi rate limits
+- Có thể reset blockchain state bất cứ lúc nào
+- Không phụ thuộc vào kết nối internet
+
+### 1. Cài đặt Solana CLI tools
+
+```bash
+sh -c "$(curl -sSfL https://release.solana.com/v1.17.9/install)"
+```
+
+### 2. Khởi động Local Validator
+
+```bash
+solana-test-validator
+```
+
+Local validator sẽ chạy tại `http://localhost:8899`
+
+### 3. Cấu hình Solana CLI
+
+```bash
+solana config set --url localhost
+```
+
+### 4. Tạo ví test và airdrop SOL
+
+```bash
+# Tạo ví test mới
+solana-keygen new --outfile test-wallet.json
+
+# Airdrop 100 SOL vào ví test
+solana airdrop 100 test-wallet.json
+```
+
+### 5. Kiểm tra kết nối
+
+```bash
+# Kiểm tra kết nối đến local validator
+solana ping
+
+# Kiểm tra số dư ví
+solana balance test-wallet.json
+```
+
+## Chạy ứng dụng
+
+1. Khởi động local validator (nếu chưa chạy):
+```bash
+solana-test-validator
+```
+
+2. Chạy ứng dụng:
+```bash
+npm run dev
+```
+
+3. Mở trình duyệt và truy cập `http://localhost:3000`
+
+## Các lệnh hữu ích
+
+### Reset Local Validator
+```bash
+# Dừng validator hiện tại
+pkill solana-test-validator
+
+# Xóa ledger cũ
+rm -rf test-ledger
+
+# Khởi động lại validator
+solana-test-validator
+```
+
+### Xem logs của validator
+```bash
+solana logs
+```
+
+### Kiểm tra trạng thái validator
+```bash
+solana block-production
+```
+
+## Lưu ý
+
+- Local validator chỉ nên sử dụng cho môi trường development
+- Khi deploy lên production, cần chuyển sang sử dụng devnet hoặc mainnet
+- Đảm bảo luôn có đủ SOL trong ví test để thực hiện các giao dịch
+- Có thể reset blockchain state bất cứ lúc nào bằng cách khởi động lại validator
+
+## Troubleshooting
+
+### 1. Không kết nối được đến local validator
+- Kiểm tra xem validator đã chạy chưa
+- Kiểm tra port 8899 có đang được sử dụng không
+- Thử reset validator
+
+### 2. Lỗi "Insufficient funds"
+- Airdrop thêm SOL vào ví test
+- Kiểm tra số dư hiện tại
+
+### 3. Lỗi "Connection refused"
+- Kiểm tra xem validator có đang chạy không
+- Thử khởi động lại validator
+- Kiểm tra firewall settings
 
 ## Project Structure
 ```
