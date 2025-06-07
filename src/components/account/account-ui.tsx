@@ -21,13 +21,18 @@ import { Label } from '@/components/ui/label'
 import { UiWalletAccount, useWalletUi, useWalletUiCluster } from '@wallet-ui/react'
 import { address, Address, Lamports, lamportsToSol } from 'gill'
 import { ErrorBoundary } from 'next/dist/client/components/error-boundary'
+import { PublicKey } from '@solana/web3.js'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { useToast } from '../ui/use-toast'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 
-export function AccountBalance({ address }: { address: Address }) {
+export function AccountBalance({ address }: { address: PublicKey }) {
   const query = useGetBalance({ address })
 
   return (
     <h1 className="text-5xl font-bold cursor-pointer" onClick={() => query.refetch()}>
-      {query.data ? <BalanceSol balance={query.data} /> : '...'} SOL
+      {query.data ? `${query.data / 1e9} SOL` : '...'}
     </h1>
   )
 }
@@ -80,93 +85,29 @@ export function AccountButtons({ address }: { address: Address }) {
   )
 }
 
-export function AccountTokens({ address }: { address: Address }) {
-  const [showAll, setShowAll] = useState(false)
+export function AccountTokens({ address }: { address: PublicKey }) {
   const query = useGetTokenAccounts({ address })
-  const client = useQueryClient()
-  const items = useMemo(() => {
-    if (showAll) return query.data
-    return query.data?.slice(0, 5)
-  }, [query.data, showAll])
 
   return (
-    <div className="space-y-2">
-      <div className="justify-between">
-        <div className="flex justify-between">
-          <h2 className="text-2xl font-bold">Token Accounts</h2>
-          <div className="space-x-2">
-            {query.isLoading ? (
-              <span className="loading loading-spinner"></span>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  await query.refetch()
-                  await client.invalidateQueries({
-                    queryKey: ['getTokenAccountBalance'],
-                  })
-                }}
-              >
-                <RefreshCw size={16} />
-              </Button>
-            )}
+    <div className="space-y-4">
+      {query.data?.map((account) => (
+        <div key={account.pubkey.toString()} className="flex items-center justify-between">
+          <div>
+            <div className="font-medium">{account.pubkey.toString()}</div>
+            <div className="text-sm text-muted-foreground">
+              {account.account.data.parsed.info.mint}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-medium">
+              {account.account.data.parsed.info.tokenAmount.uiAmount}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {account.account.data.parsed.info.tokenAmount.uiAmountString}
+            </div>
           </div>
         </div>
-      </div>
-      {query.isError && <pre className="alert alert-error">Error: {query.error?.message.toString()}</pre>}
-      {query.isSuccess && (
-        <div>
-          {query.data.length === 0 ? (
-            <div>No token accounts found.</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Public Key</TableHead>
-                  <TableHead>Mint</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items?.map(({ account, pubkey }) => (
-                  <TableRow key={pubkey.toString()}>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <span className="font-mono">
-                          <ExplorerLink label={ellipsify(pubkey.toString())} address={pubkey.toString()} />
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex space-x-2">
-                        <span className="font-mono">
-                          <ExplorerLink
-                            label={ellipsify(account.data.parsed.info.mint)}
-                            address={account.data.parsed.info.mint.toString()}
-                          />
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className="font-mono">{account.data.parsed.info.tokenAmount.uiAmount}</span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-
-                {(query.data?.length ?? 0) > 5 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center">
-                      <Button variant="outline" onClick={() => setShowAll(!showAll)}>
-                        {showAll ? 'Show Less' : 'Show All'}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      )}
+      ))}
     </div>
   )
 }
@@ -329,5 +270,147 @@ function ModalSend(props: { address: Address; account: UiWalletAccount }) {
         value={amount}
       />
     </AppModal>
+  )
+}
+
+export function AccountSignatures({ address }: { address: PublicKey }) {
+  const query = useGetSignatures({ address })
+
+  return (
+    <div className="space-y-4">
+      {query.data?.map((sig) => (
+        <div key={sig.signature} className="flex items-center justify-between">
+          <div className="font-medium">{sig.signature}</div>
+          <div className="text-sm text-muted-foreground">
+            {new Date(sig.blockTime! * 1000).toLocaleString()}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function AccountTransfer({ address }: { address: PublicKey }) {
+  const { publicKey } = useWallet()
+  const [destination, setDestination] = useState('')
+  const [amount, setAmount] = useState('')
+  const { toast } = useToast()
+  const transfer = useTransferSol({ address })
+
+  const handleTransfer = async () => {
+    if (!destination || !amount) {
+      toast({
+        title: 'Error',
+        description: 'Please enter both destination and amount',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      const destPubkey = new PublicKey(destination)
+      await transfer.mutateAsync({
+        destination: destPubkey,
+        amount: parseFloat(amount),
+      })
+      setDestination('')
+      setAmount('')
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to transfer SOL',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="destination">Destination Address</Label>
+        <Input
+          id="destination"
+          value={destination}
+          onChange={(e) => setDestination(e.target.value)}
+          placeholder="Enter destination address"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="amount">Amount (SOL)</Label>
+        <Input
+          id="amount"
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Enter amount in SOL"
+        />
+      </div>
+      <Button onClick={handleTransfer} disabled={!publicKey || transfer.isPending}>
+        {transfer.isPending ? 'Transferring...' : 'Transfer SOL'}
+      </Button>
+    </div>
+  )
+}
+
+export function AccountAirdrop({ address }: { address: PublicKey }) {
+  const { toast } = useToast()
+  const airdrop = useRequestAirdrop({ address })
+
+  const handleAirdrop = async () => {
+    try {
+      await airdrop.mutateAsync()
+      toast({
+        title: 'Success',
+        description: 'Airdrop requested successfully',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to request airdrop',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  return (
+    <Button onClick={handleAirdrop} disabled={airdrop.isPending}>
+      {airdrop.isPending ? 'Requesting...' : 'Request Airdrop'}
+    </Button>
+  )
+}
+
+export function AccountCard({ address }: { address: PublicKey }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account</CardTitle>
+        <CardDescription>{address.toString()}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="balance">
+          <TabsList>
+            <TabsTrigger value="balance">Balance</TabsTrigger>
+            <TabsTrigger value="tokens">Tokens</TabsTrigger>
+            <TabsTrigger value="signatures">Signatures</TabsTrigger>
+            <TabsTrigger value="transfer">Transfer</TabsTrigger>
+          </TabsList>
+          <TabsContent value="balance">
+            <AccountBalance address={address} />
+          </TabsContent>
+          <TabsContent value="tokens">
+            <AccountTokens address={address} />
+          </TabsContent>
+          <TabsContent value="signatures">
+            <AccountSignatures address={address} />
+          </TabsContent>
+          <TabsContent value="transfer">
+            <AccountTransfer address={address} />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+      <CardFooter>
+        <AccountAirdrop address={address} />
+      </CardFooter>
+    </Card>
   )
 }
