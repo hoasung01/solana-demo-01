@@ -1,122 +1,84 @@
 'use client'
 
-import { TOKEN_2022_PROGRAM_ADDRESS, TOKEN_PROGRAM_ADDRESS } from 'gill/programs/token'
-import { getTransferSolInstruction } from 'gill/programs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  UiWalletAccount,
-  useWalletAccountTransactionSendingSigner,
-  useWalletUi,
-  useWalletUiCluster,
-} from '@wallet-ui/react'
-import {
-  address,
-  Address,
-  airdropFactory,
-  appendTransactionMessageInstruction,
-  assertIsTransactionMessageWithSingleSendingSigner,
-  Blockhash,
-  createTransactionMessage,
-  getBase58Decoder,
-  lamports,
-  pipe,
-  setTransactionMessageFeePayerSigner,
-  setTransactionMessageLifetimeUsingBlockhash,
-  signAndSendTransactionMessageWithSigners,
-  SolanaClient,
-  TransactionSendingSigner,
-} from 'gill'
+import { useWallet, useConnection } from '@solana/wallet-adapter-react'
+import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL, Connection } from '@solana/web3.js'
 import { toast } from 'sonner'
 import { useTransactionToast } from '../use-transaction-toast'
 
-export function useGetBalance({ address }: { address: Address }) {
-  const { cluster } = useWalletUiCluster()
-  const { client } = useWalletUi()
+export function useGetBalance({ address }: { address: PublicKey }) {
+  const { connection } = useConnection()
 
   return useQuery({
-    queryKey: ['get-balance', { cluster, address }],
-    queryFn: () =>
-      client.rpc
-        .getBalance(address)
-        .send()
-        .then((res) => res.value),
+    queryKey: ['get-balance', address.toString()],
+    queryFn: () => connection.getBalance(address),
   })
 }
 
-export function useGetSignatures({ address }: { address: Address }) {
-  const { cluster } = useWalletUiCluster()
-  const { client } = useWalletUi()
+export function useGetSignatures({ address }: { address: PublicKey }) {
+  const { connection } = useConnection()
 
   return useQuery({
-    queryKey: ['get-signatures', { cluster, address }],
-    queryFn: () => client.rpc.getSignaturesForAddress(address).send(),
+    queryKey: ['get-signatures', address.toString()],
+    queryFn: () => connection.getSignaturesForAddress(address),
   })
 }
 
-export function useGetTokenAccounts({ address }: { address: Address }) {
-  const { cluster } = useWalletUiCluster()
-  const { client } = useWalletUi()
+export function useGetTokenAccounts({ address }: { address: PublicKey }) {
+  const { connection } = useConnection()
 
   return useQuery({
-    queryKey: ['get-token-accounts', { cluster, address }],
-    queryFn: async () =>
-      Promise.all([
-        client.rpc
-          .getTokenAccountsByOwner(
-            address,
-            { programId: TOKEN_PROGRAM_ADDRESS },
-            { commitment: 'confirmed', encoding: 'jsonParsed' },
-          )
-          .send()
-          .then((res) => res.value ?? []),
-        client.rpc
-          .getTokenAccountsByOwner(
-            address,
-            { programId: TOKEN_2022_PROGRAM_ADDRESS },
-            { commitment: 'confirmed', encoding: 'jsonParsed' },
-          )
-          .send()
-          .then((res) => res.value ?? []),
-      ]).then(([tokenAccounts, token2022Accounts]) => [...tokenAccounts, ...token2022Accounts]),
+    queryKey: ['get-token-accounts', address.toString()],
+    queryFn: async () => {
+      const [tokenAccounts, token2022Accounts] = await Promise.all([
+        connection.getParsedTokenAccountsByOwner(address, { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }),
+        connection.getParsedTokenAccountsByOwner(address, { programId: new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb') }),
+      ])
+      return [...tokenAccounts.value, ...token2022Accounts.value]
+    },
   })
 }
 
-export function useTransferSol({ address, account }: { address: Address; account: UiWalletAccount }) {
-  const { cluster } = useWalletUiCluster()
-  const { client } = useWalletUi()
+export function useTransferSol({ address }: { address: PublicKey }) {
+  const { connection } = useConnection()
+  const { publicKey, sendTransaction } = useWallet()
   const toastTransaction = useTransactionToast()
-  const txSigner = useWalletAccountTransactionSendingSigner(account, cluster.id)
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationKey: ['transfer-sol', { cluster, address }],
-    mutationFn: async (input: { destination: Address; amount: number }) => {
+    mutationKey: ['transfer-sol', address.toString()],
+    mutationFn: async (input: { destination: PublicKey; amount: number }) => {
+      if (!publicKey) {
+        throw new Error('Wallet not connected')
+      }
+
       try {
-        const { signature } = await createTransaction({
-          txSigner,
-          destination: input.destination,
-          amount: input.amount,
-          client,
-        })
+        const transaction = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: input.destination,
+            lamports: input.amount * LAMPORTS_PER_SOL,
+          })
+        )
 
-        console.log(signature)
+        const signature = await sendTransaction(transaction, connection)
+        await connection.confirmTransaction(signature)
         return signature
-      } catch (error: unknown) {
-        console.log('error', `Transaction failed! ${error}`)
-
-        return
+      } catch (error) {
+        console.error('Transaction failed:', error)
+        throw error
       }
     },
     onSuccess: (signature) => {
-      if (signature?.length) {
+      if (signature) {
         toastTransaction(signature)
       }
       return Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ['get-balance', { cluster, address }],
+          queryKey: ['get-balance', address.toString()],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['get-signatures', { cluster, address }],
+          queryKey: ['get-signatures', address.toString()],
         }),
       ])
     },
@@ -126,70 +88,27 @@ export function useTransferSol({ address, account }: { address: Address; account
   })
 }
 
-export function useRequestAirdrop({ address }: { address: Address }) {
-  const { cluster } = useWalletUiCluster()
-  const { client } = useWalletUi()
+export function useRequestAirdrop({ address }: { address: PublicKey }) {
+  const { connection } = useConnection()
   const queryClient = useQueryClient()
   const toastTransaction = useTransactionToast()
-  const airdrop = airdropFactory(client)
 
   return useMutation({
-    mutationKey: ['airdrop', { cluster, address }],
-    mutationFn: async (amount: number = 1) =>
-      airdrop({
-        commitment: 'confirmed',
-        recipientAddress: address,
-        lamports: lamports(BigInt(Math.round(amount * 1_000_000_000))),
-      }),
+    mutationKey: ['airdrop', address.toString()],
+    mutationFn: async (amount: number = 1) => {
+      const signature = await connection.requestAirdrop(
+        address,
+        amount * LAMPORTS_PER_SOL
+      )
+      await connection.confirmTransaction(signature)
+      return signature
+    },
     onSuccess: (signature) => {
       toastTransaction(signature)
       return Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['get-balance', { cluster, address }] }),
-        queryClient.invalidateQueries({ queryKey: ['get-signatures', { cluster, address }] }),
+        queryClient.invalidateQueries({ queryKey: ['get-balance', address.toString()] }),
+        queryClient.invalidateQueries({ queryKey: ['get-signatures', address.toString()] }),
       ])
     },
   })
-}
-
-async function createTransaction({
-  amount,
-  destination,
-  client,
-  txSigner,
-}: {
-  amount: number
-  destination: Address
-  client: SolanaClient
-  txSigner: TransactionSendingSigner
-}): Promise<{
-  signature: string
-  latestBlockhash: {
-    blockhash: Blockhash
-    lastValidBlockHeight: bigint
-  }
-}> {
-  const { value: latestBlockhash } = await client.rpc.getLatestBlockhash({ commitment: 'confirmed' }).send()
-
-  const message = pipe(
-    createTransactionMessage({ version: 0 }),
-    (m) => setTransactionMessageFeePayerSigner(txSigner, m),
-    (m) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, m),
-    (m) =>
-      appendTransactionMessageInstruction(
-        getTransferSolInstruction({
-          amount,
-          destination: address(destination),
-          source: txSigner,
-        }),
-        m,
-      ),
-  )
-  assertIsTransactionMessageWithSingleSendingSigner(message)
-
-  const signature = await signAndSendTransactionMessageWithSigners(message)
-
-  return {
-    signature: getBase58Decoder().decode(signature),
-    latestBlockhash,
-  }
 }
