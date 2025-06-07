@@ -3,3 +3,43 @@ description:
 globs:
 alwaysApply: false
 ---
+# Smart Contract Updates
+
+## Stake Pool Program Updates
+
+### Recent Changes
+1. Added BNPL transaction processing
+2. Implemented card linking functionality
+3. Enhanced stake management
+4. Improved error handling
+5. Added security checks
+
+### Planned Updates
+1. Multi-token support
+2. Enhanced reward system
+3. Advanced stake management
+4. Improved transaction processing
+5. Additional security features
+
+## Development Process
+
+### Testing
+1. Local testing with test ledger
+2. Unit tests for all instructions
+3. Integration tests
+4. Security audits
+5. Performance testing
+
+### Deployment
+1. Testnet deployment
+2. Security review
+3. Mainnet deployment
+4. Monitoring setup
+5. Backup procedures
+
+## Guidelines
+1. Follow Solana best practices
+2. Maintain backward compatibility
+3. Document all changes
+4. Test thoroughly
+5. Security first approach

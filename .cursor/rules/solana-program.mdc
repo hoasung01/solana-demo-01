@@ -3,23 +3,3 @@ description:
 globs:
 alwaysApply: false
 ---
-# Solana Program Structure
-
-The project includes a staking pool program implemented in the `programs/stake-pool` directory. This program handles the core staking functionality on the Solana blockchain.
-
-## Program Components
-
-The staking pool program implements the following key features:
-- Token staking and unstaking
-- Reward distribution
-- Pool management
-
-## Development Guidelines
-
-1. Use the test ledger for local development and testing
-2. Test wallet configuration is stored in `test-wallet.json`
-3. Program updates should be tested thoroughly before deployment
-
-## Testing
-
-The project includes a local test environment in the `test-ledger` directory. Use this for development and testing before deploying to mainnet or testnet.

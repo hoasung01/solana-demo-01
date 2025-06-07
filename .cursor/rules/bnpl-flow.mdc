@@ -3,3 +3,43 @@ description:
 globs:
 alwaysApply: false
 ---
+# BNPL Flow
+
+## Transaction Flow
+
+1. User connects wallet
+2. User links credit card
+3. User initiates BNPL transaction
+4. System checks stake amount
+5. System processes transaction
+6. System updates stake status
+
+## Credit Card Integration
+
+### Card Linking
+1. User enters card details
+2. System validates card
+3. System stores card reference
+4. System links card to wallet
+
+### Transaction Processing
+1. Validate transaction amount
+2. Check stake coverage
+3. Process payment
+4. Update stake status
+5. Record transaction
+
+## Security Measures
+
+1. Card data encryption
+2. Transaction validation
+3. Stake verification
+4. Amount limits
+5. Error handling
+
+## Development Guidelines
+1. Follow PCI compliance
+2. Implement proper encryption
+3. Maintain transaction logs
+4. Handle edge cases
+5. Test thoroughly

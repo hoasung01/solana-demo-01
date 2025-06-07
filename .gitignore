@@ -39,3 +39,25 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/*
+!.cursor/rules/
+
+# Solana specific
+/test-ledger/
+/test-wallet.json
+/programs/target/
+/programs/**/target/
+/programs/**/Cargo.lock
+
+# Build artifacts
+*.so
+*.dylib
+*.dll
+*.exe
+*.wasm
