@@ -7,11 +7,6 @@ const nextConfig = {
     };
     return config;
   },
-  turbopack: {
-    rules: {
-      '*.css': ['postcss'],
-    },
-  },
 };
 
 module.exports = nextConfig;
