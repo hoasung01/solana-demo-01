@@ -100,6 +100,10 @@ export function useStakePool() {
       const creditLimit = totalStaked * (CREDIT_LIMIT_PERCENTAGE / 100);
       const usedCredit = 0; // For now, we'll set this to 0
 
+      // For now, we'll return an empty array for linkedCards
+      // In a real implementation, this would be parsed from the account data
+      const linkedCards: { id: string; lastFour: string }[] = [];
+
       return {
         totalStaked,
         rewardRate,
@@ -107,6 +111,7 @@ export function useStakePool() {
         authority,
         creditLimit,
         usedCredit,
+        linkedCards,
       };
     } catch (err) {
       console.error('Error fetching stake info:', err);
