@@ -187,6 +187,39 @@ export function useStakePool() {
     }
   }, [wallet, connection, stakePoolPda]);
 
+  const processBNPLTransaction = useCallback(async (amount: number) => {
+    if (!wallet.publicKey || !stakePoolPda) {
+      throw new Error('Wallet or stake pool not initialized');
+    }
+
+    try {
+      const lamports = amount * LAMPORTS_PER_SOL;
+      const transaction = new Transaction();
+
+      transaction.add(
+        new TransactionInstruction({
+          keys: [
+            { pubkey: stakePoolPda, isSigner: false, isWritable: true },
+            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+          ],
+          programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
+          data: Buffer.from([
+            INSTRUCTION_INDEX.PROCESS_BNPL,
+            ...new BN(lamports).toArray('le', 8),
+          ]),
+        })
+      );
+
+      const signature = await wallet.sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature);
+
+      return true;
+    } catch (err) {
+      console.error('Error processing BNPL transaction:', err);
+      return false;
+    }
+  }, [wallet, connection, stakePoolPda]);
+
   return {
     loading,
     error,
@@ -194,5 +227,6 @@ export function useStakePool() {
     initializeStakePool,
     stake,
     unstake,
+    processBNPLTransaction,
   };
 }
