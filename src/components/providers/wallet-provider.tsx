@@ -3,13 +3,7 @@
 import { FC, ReactNode, useMemo, useCallback, useState } from 'react';
 import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork, WalletError } from '@solana/wallet-adapter-base';
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-  BackpackWalletAdapter,
-  BraveWalletAdapter,
-  CoinbaseWalletAdapter,
-} from '@solana/wallet-adapter-wallets';
+import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 import { toast } from 'sonner';
 import { RPCConfig } from '@/components/solana/rpc-config';
@@ -35,11 +29,7 @@ export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
   // Initialize wallet adapters
   const wallets = useMemo(
     () => [
-      new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
-      new BraveWalletAdapter(),
-      new CoinbaseWalletAdapter(),
     ],
     []
   );
