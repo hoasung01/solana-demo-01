@@ -11,7 +11,7 @@ export function WalletConnect() {
     try {
       await connect();
       toast.success('Connected to Solflare');
-    } catch (error) {
+    } catch {
       toast.error('Failed to connect to Solflare');
     }
   };

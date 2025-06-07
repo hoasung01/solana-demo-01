@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { PublicKey, Transaction, LAMPORTS_PER_SOL, ComputeBudgetProgram, SystemProgram, TransactionInstruction, Connection } from '@solana/web3.js';
 import { Button } from "@/components/ui/button";
@@ -411,7 +411,30 @@ export function StakeForm() {
         setIsClient(true);
     }, []);
 
-    // Thêm useEffect để kiểm tra trạng thái kết nối
+    // Hàm kiểm tra kết nối ban đầu
+    const checkInitialConnection = useCallback(async () => {
+        if (!isOnline) {
+            toast.error('Không có kết nối internet. Vui lòng kiểm tra lại kết nối của bạn.');
+            return;
+        }
+
+        try {
+            const newConnection = await checkConnectionWithFallback();
+            setConnection(newConnection);
+            setIsConnected(true);
+            toast.success('Đã kết nối đến Solana devnet');
+        } catch (error) {
+            console.error('Failed to establish initial connection:', error);
+            toast.error('Không thể kết nối đến Solana devnet. Vui lòng thử lại sau.');
+            setIsConnected(false);
+        }
+    }, [isOnline]);
+
+    // Cập nhật useEffect kiểm tra kết nối ban đầu
+    useEffect(() => {
+        checkInitialConnection();
+    }, [isOnline, checkInitialConnection]);
+
     useEffect(() => {
         const handleOnline = () => {
             setIsOnline(true);
@@ -434,39 +457,7 @@ export function StakeForm() {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, []);
-
-    // Hàm kiểm tra kết nối ban đầu
-    const checkInitialConnection = async () => {
-        if (!isOnline) {
-            toast.error('Không có kết nối internet. Vui lòng kiểm tra lại kết nối của bạn.');
-            return;
-        }
-
-        try {
-            const newConnection = await checkConnectionWithFallback();
-            setConnection(newConnection);
-            setIsConnected(true);
-            toast.success('Đã kết nối đến Solana devnet');
-        } catch (error) {
-            console.error('Failed to establish initial connection:', error);
-            toast.error('Không thể kết nối đến Solana devnet. Vui lòng thử lại sau.');
-            setIsConnected(false);
-        }
-    };
-
-    // Cập nhật useEffect kiểm tra kết nối ban đầu
-    useEffect(() => {
-        checkInitialConnection();
-    }, [isOnline]);
-
-    useEffect(() => {
-        // ... existing code ...
-    }, [checkInitialConnection]); // Add checkInitialConnection to the dependency array
-
-    useEffect(() => {
-        // ... existing code ...
-    }, [checkInitialConnection]); // Add checkInitialConnection to the dependency array
+    }, [checkInitialConnection]);
 
     const handleStake = async () => {
         if (!publicKey) {

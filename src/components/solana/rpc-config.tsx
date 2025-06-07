@@ -23,7 +23,7 @@ export function RPCConfig({ currentEndpoint, onEndpointChange }: RPCConfigProps)
       onEndpointChange(endpoint);
       setIsEditing(false);
       toast.success('RPC endpoint updated');
-    } catch (error) {
+    } catch {
       toast.error('Invalid RPC endpoint URL');
     }
   };
