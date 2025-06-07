@@ -1,7 +1,6 @@
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useCallback, useEffect, useState } from 'react';
-import { BN } from 'bn.js';
-import { STAKE_POOL_PROGRAM_ID } from '@/lib/constants';
+import { STAKE_POOL_PROGRAM_ID, CREDIT_LIMIT_PERCENTAGE } from '@/lib/constants';
 import {
   PublicKey,
   Transaction,
@@ -94,12 +93,12 @@ export function useStakePool() {
 
       // Parse account data
       const data = accountInfo.data;
-      const totalStaked = new BN(data.slice(0, 8), 'le');
-      const rewardRate = new BN(data.slice(8, 16), 'le');
-      const lastUpdateTime = new BN(data.slice(16, 24), 'le');
+      const totalStaked = Number(data.readBigUInt64LE(0)) / LAMPORTS_PER_SOL;
+      const rewardRate = Number(data.readBigUInt64LE(8)) / LAMPORTS_PER_SOL;
+      const lastUpdateTime = Number(data.readBigUInt64LE(16));
       const authority = new PublicKey(data.slice(24, 56));
-      const creditLimit = totalStaked.muln(CREDIT_LIMIT_PERCENTAGE).divn(100);
-      const usedCredit = new BN(0); // For now, we'll set this to 0
+      const creditLimit = totalStaked * (CREDIT_LIMIT_PERCENTAGE / 100);
+      const usedCredit = 0; // For now, we'll set this to 0
 
       return {
         totalStaked,
@@ -143,7 +142,7 @@ export function useStakePool() {
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([
             INSTRUCTION_INDEX.STAKE,
-            ...new BN(lamports).toArray('le', 8),
+            ...new Uint8Array(new BigUint64Array([BigInt(lamports)]).buffer),
           ]),
         })
       );
@@ -176,7 +175,7 @@ export function useStakePool() {
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([
             INSTRUCTION_INDEX.UNSTAKE,
-            ...new BN(lamports).toArray('le', 8),
+            ...new Uint8Array(new BigUint64Array([BigInt(lamports)]).buffer),
           ]),
         })
       );
@@ -209,7 +208,7 @@ export function useStakePool() {
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([
             INSTRUCTION_INDEX.PROCESS_BNPL,
-            ...new BN(lamports).toArray('le', 8),
+            ...new Uint8Array(new BigUint64Array([BigInt(lamports)]).buffer),
           ]),
         })
       );
