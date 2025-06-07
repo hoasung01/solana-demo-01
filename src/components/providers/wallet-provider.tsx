@@ -3,10 +3,18 @@
 import { FC, ReactNode, useMemo, useCallback, useState } from 'react';
 import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork, WalletError } from '@solana/wallet-adapter-base';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+  BackpackWalletAdapter,
+  BraveWalletAdapter,
+  CoinbaseWalletAdapter,
+} from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 import { toast } from 'sonner';
 import { RPCConfig } from '@/components/solana/rpc-config';
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import '@solana/wallet-adapter-react-ui/styles.css';
 
 interface WalletProviderProps {
   children: ReactNode;
@@ -24,10 +32,14 @@ export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
     return customEndpoint || clusterApiUrl(network);
   }, [network, customEndpoint]);
 
-  // Initialize Solflare wallet adapter
+  // Initialize wallet adapters
   const wallets = useMemo(
     () => [
+      new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
+      new BackpackWalletAdapter(),
+      new BraveWalletAdapter(),
+      new CoinbaseWalletAdapter(),
     ],
     []
   );
@@ -51,13 +63,15 @@ export const WalletProvider: FC<WalletProviderProps> = ({ children }) => {
         autoConnect
         onError={onError}
       >
-        <div className="fixed bottom-4 right-4 z-50">
-          <RPCConfig
-            currentEndpoint={endpoint}
-            onEndpointChange={handleEndpointChange}
-          />
-        </div>
-        {children}
+        <WalletModalProvider>
+          <div className="fixed bottom-4 right-4 z-50">
+            <RPCConfig
+              currentEndpoint={endpoint}
+              onEndpointChange={handleEndpointChange}
+            />
+          </div>
+          {children}
+        </WalletModalProvider>
       </SolanaWalletProvider>
     </ConnectionProvider>
   );

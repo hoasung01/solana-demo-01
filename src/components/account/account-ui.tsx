@@ -18,10 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AppModal } from '@/components/app-modal'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { UiWalletAccount, useWalletUi, useWalletUiCluster } from '@wallet-ui/react'
-import { address, Address, Lamports, lamportsToSol } from 'gill'
-import { ErrorBoundary } from 'next/dist/client/components/error-boundary'
-import { PublicKey } from '@solana/web3.js'
+import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useToast } from '@/components/ui/use-toast'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,21 +29,20 @@ export function AccountBalance({ address }: { address: PublicKey }) {
 
   return (
     <h1 className="text-5xl font-bold cursor-pointer" onClick={() => query.refetch()}>
-      {query.data ? `${query.data / 1e9} SOL` : '...'}
+      {query.data ? `${query.data / LAMPORTS_PER_SOL} SOL` : '...'}
     </h1>
   )
 }
 
 export function AccountChecker() {
-  const { account } = useWalletUi()
-  if (!account) {
+  const { publicKey } = useWallet()
+  if (!publicKey) {
     return null
   }
-  return <AccountBalanceCheck address={address(account.address)} />
+  return <AccountBalanceCheck address={publicKey} />
 }
 
-export function AccountBalanceCheck({ address }: { address: Address }) {
-  const { cluster } = useWalletUiCluster()
+export function AccountBalanceCheck({ address }: { address: PublicKey }) {
   const mutation = useRequestAirdrop({ address })
   const query = useGetBalance({ address })
 
@@ -62,23 +58,20 @@ export function AccountBalanceCheck({ address }: { address: Address }) {
           </Button>
         }
       >
-        You are connected to <strong>{cluster.label}</strong> but your account is not found on this cluster.
+        Your account is not found on this cluster.
       </AppAlert>
     )
   }
   return null
 }
 
-export function AccountButtons({ address }: { address: Address }) {
-  const { cluster } = useWalletUiCluster()
-  const { account } = useWalletUi()
+export function AccountButtons({ address }: { address: PublicKey }) {
+  const { publicKey } = useWallet()
   return (
     <div>
       <div className="space-x-2">
-        {cluster.urlOrMoniker === 'mainnet' ? null : <ModalAirdrop address={address} />}
-        <ErrorBoundary errorComponent={() => null}>
-          {account ? <ModalSend address={address} account={account} /> : null}
-        </ErrorBoundary>
+        <ModalAirdrop address={address} />
+        {publicKey ? <ModalSend address={address} /> : null}
         <ModalReceive address={address} />
       </div>
     </div>
@@ -112,7 +105,7 @@ export function AccountTokens({ address }: { address: PublicKey }) {
   )
 }
 
-export function AccountTransactions({ address }: { address: Address }) {
+export function AccountTransactions({ address }: { address: PublicKey }) {
   const query = useGetSignatures({ address })
   const [showAll, setShowAll] = useState(false)
 
@@ -189,11 +182,7 @@ export function AccountTransactions({ address }: { address: Address }) {
   )
 }
 
-function BalanceSol({ balance }: { balance: Lamports }) {
-  return <span>{lamportsToSol(balance)}</span>
-}
-
-function ModalReceive({ address }: { address: Address }) {
+function ModalReceive({ address }: { address: PublicKey }) {
   return (
     <AppModal title="Receive">
       <p>Receive assets by sending them to your public key:</p>
@@ -202,7 +191,7 @@ function ModalReceive({ address }: { address: Address }) {
   )
 }
 
-function ModalAirdrop({ address }: { address: Address }) {
+function ModalAirdrop({ address }: { address: PublicKey }) {
   const mutation = useRequestAirdrop({ address })
   const [amount, setAmount] = useState('2')
 
@@ -228,13 +217,28 @@ function ModalAirdrop({ address }: { address: Address }) {
   )
 }
 
-function ModalSend(props: { address: Address; account: UiWalletAccount }) {
-  const mutation = useTransferSol({ address: props.address, account: props.account })
+function ModalSend({ address }: { address: PublicKey }) {
+  const mutation = useTransferSol({ address })
   const [destination, setDestination] = useState('')
   const [amount, setAmount] = useState('1')
+  const { toast } = useToast()
 
-  if (!props.address || !props.account) {
-    return <div>Wallet not connected</div>
+  const handleSubmit = async () => {
+    try {
+      const destPubkey = new PublicKey(destination)
+      await mutation.mutateAsync({
+        destination: destPubkey,
+        amount: parseFloat(amount),
+      })
+      setDestination('')
+      setAmount('')
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to transfer SOL',
+        variant: 'destructive',
+      })
+    }
   }
 
   return (
@@ -242,12 +246,7 @@ function ModalSend(props: { address: Address; account: UiWalletAccount }) {
       title="Send"
       submitDisabled={!destination || !amount || mutation.isPending}
       submitLabel="Send"
-      submit={() => {
-        mutation.mutateAsync({
-          destination: address(destination),
-          amount: parseFloat(amount),
-        })
-      }}
+      submit={handleSubmit}
     >
       <Label htmlFor="destination">Destination</Label>
       <Input

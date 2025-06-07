@@ -3,22 +3,41 @@
 import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
 import { ReactNode } from 'react'
-import { getExplorerLink, GetExplorerLinkArgs } from 'gill'
 import { Button } from '@/components/ui/button'
 import { AppAlert } from '@/components/app-alert'
-import { useWalletUi, useWalletUiCluster } from '@wallet-ui/react'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { PublicKey } from '@solana/web3.js'
+
+interface ExplorerLinkProps {
+  address?: string
+  block?: string
+  transaction?: string
+  className?: string
+  label: string
+}
 
 export function ExplorerLink({
   className,
   label = '',
   ...link
-}: GetExplorerLinkArgs & {
-  className?: string
-  label: string
-}) {
+}: ExplorerLinkProps) {
+  const getExplorerLink = () => {
+    const baseUrl = 'https://explorer.solana.com'
+    if (link.address) {
+      return `${baseUrl}/address/${link.address}`
+    }
+    if (link.block) {
+      return `${baseUrl}/block/${link.block}`
+    }
+    if (link.transaction) {
+      return `${baseUrl}/tx/${link.transaction}`
+    }
+    return baseUrl
+  }
+
   return (
     <a
-      href={getExplorerLink(link)}
+      href={getExplorerLink()}
       target="_blank"
       rel="noopener noreferrer"
       className={className ? className : `link font-mono`}
@@ -29,8 +48,8 @@ export function ExplorerLink({
 }
 
 export function ClusterChecker({ children }: { children: ReactNode }) {
-  const { client } = useWalletUi()
-  const { cluster } = useWalletUiCluster()
+  const { client } = useWallet()
+  const { cluster } = useWallet()
 
   const query = useQuery({
     queryKey: ['version', { cluster, endpoint: cluster.urlOrMoniker }],
