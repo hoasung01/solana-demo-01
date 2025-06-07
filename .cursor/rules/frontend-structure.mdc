@@ -1,0 +1,36 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Frontend Application Structure
+
+The frontend is built using Next.js and follows a modern React application structure.
+
+## Directory Structure
+
+- `src/app/` - Contains the main application routes and pages
+- `src/components/` - Reusable React components
+- `src/lib/` - Utility functions and shared code
+
+## Key Components
+
+The application includes several key components for interacting with the Solana blockchain:
+- Wallet connection
+- Staking interface
+- Pool management
+- Transaction handling
+
+## Development Guidelines
+
+1. Use TypeScript for all new components and functions
+2. Follow the existing component structure in `src/components/`
+3. Place shared utilities in `src/lib/`
+4. Use the Next.js app router for new pages and routes
+
+## Configuration
+
+The application uses several configuration files:
+- [next.config.js](mdc:next.config.js) - Next.js configuration
+- [tsconfig.json](mdc:tsconfig.json) - TypeScript settings
+- [components.json](mdc:components.json) - Component configuration

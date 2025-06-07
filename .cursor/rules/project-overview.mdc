@@ -1,0 +1,27 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Solana Demo Project Overview
+
+This is a Solana-based project that implements a staking pool system. The project is built using Next.js for the frontend and Solana programs for the blockchain functionality.
+
+## Key Directories
+
+- `src/` - Contains the frontend application code
+  - `app/` - Next.js application routes and pages
+  - `components/` - Reusable React components
+  - `lib/` - Utility functions and shared code
+
+- `programs/` - Contains Solana program code
+  - `stake-pool/` - The main staking pool program implementation
+
+- `test-ledger/` - Local test environment for Solana
+- `test-wallet.json` - Test wallet configuration
+
+## Important Files
+
+- [package.json](mdc:package.json) - Project dependencies and scripts
+- [next.config.js](mdc:next.config.js) - Next.js configuration
+- [tsconfig.json](mdc:tsconfig.json) - TypeScript configuration

@@ -11,6 +11,8 @@ use solana_program::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use spl_token::state::Account as TokenAccount;
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 /// Cấu trúc dữ liệu lưu trữ thông tin của Stake Pool
 #[derive(Debug)]
@@ -18,16 +20,20 @@ pub struct StakePool {
     pub total_staked: u64,        // Tổng số SOL đã stake
     pub reward_rate: u64,         // Tỷ lệ lãi suất hàng năm (%)
     pub last_update_time: i64,    // Thời điểm cập nhật lãi cuối cùng
+    pub authority: Pubkey,
+    pub linked_cards: std::collections::BTreeMap<Pubkey, CardInfo>,
 }
 
 impl StakePool {
-    pub const LEN: usize = 8 + 8 + 8; // u64 + u64 + i64
+    pub const LEN: usize = 8 + 8 + 8 + 32 + 1000; // u64 + u64 + i64 + 32 bytes for authority + 1000 bytes for linked_cards
 
     pub fn new() -> Self {
         Self {
             total_staked: 0,
             reward_rate: 5,
             last_update_time: 0,
+            authority: Pubkey::default(),
+            linked_cards: std::collections::BTreeMap::new(),
         }
     }
 
@@ -42,6 +48,13 @@ impl StakePool {
         data[8..16].copy_from_slice(&self.reward_rate.to_le_bytes());
         // Serialize last_update_time (i64)
         data[16..24].copy_from_slice(&self.last_update_time.to_le_bytes());
+        // Serialize authority (Pubkey)
+        data[24..56].copy_from_slice(&self.authority.to_bytes());
+        // Serialize linked_cards (BTreeMap<Pubkey, CardInfo>)
+        for (key, card_info) in &self.linked_cards {
+            data[56..64].copy_from_slice(&key.to_bytes());
+            card_info.serialize(&mut data[64..])?;
+        }
 
         Ok(())
     }
@@ -54,11 +67,22 @@ impl StakePool {
         let total_staked = u64::from_le_bytes(data[0..8].try_into().unwrap());
         let reward_rate = u64::from_le_bytes(data[8..16].try_into().unwrap());
         let last_update_time = i64::from_le_bytes(data[16..24].try_into().unwrap());
+        let authority = Pubkey::from_bytes(data[24..56].try_into().unwrap());
+        let mut linked_cards = std::collections::BTreeMap::new();
+        let mut offset = 56;
+        while offset < data.len() {
+            let key = Pubkey::from_bytes(data[offset..offset+32].try_into().unwrap());
+            let card_info = CardInfo::deserialize(&data[offset+32..])?;
+            linked_cards.insert(key, card_info);
+            offset += 32 + card_info.len();
+        }
 
         Ok(Self {
             total_staked,
             reward_rate,
             last_update_time,
+            authority,
+            linked_cards,
         })
     }
 }
@@ -70,6 +94,9 @@ pub enum StakePoolInstruction {
     Stake { amount: u64 },        // Stake SOL với số lượng cụ thể
     Unstake { amount: u64 },      // Rút SOL đã stake
     ClaimRewards,                 // Nhận lãi đã tích lũy
+    LinkCard { card_id: String },  // Liên kết thẻ tín dụng
+    UnlinkCard { card_id: String },// Bỏ liên kết thẻ tín dụng
+    ProcessBNPL { amount: u64 },  // Xử lý giao dịch BNPL
 }
 
 // Đánh dấu điểm vào của chương trình
@@ -112,6 +139,18 @@ pub fn process_instruction(
         3 => {
             msg!("Instruction: Claim Rewards");
             process_claim_rewards(program_id, accounts)
+        }
+        4 => {
+            msg!("Instruction: Link Card");
+            process_link_card(program_id, accounts, amount)
+        }
+        5 => {
+            msg!("Instruction: Unlink Card");
+            process_unlink_card(program_id, accounts, amount)
+        }
+        6 => {
+            msg!("Instruction: Process BNPL");
+            process_bnpl_transaction(program_id, accounts, amount)
         }
         _ => Err(ProgramError::InvalidInstructionData),
     }
@@ -301,4 +340,91 @@ fn calculate_rewards(
     let rewards = (total_staked as f64 * reward_rate_decimal * time_elapsed as f64) / seconds_in_year;
 
     Ok(rewards as u64)
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(init, payer = authority, space = 8 + StakePool::LEN)]
+    pub stake_pool: Account<'info, StakePool>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Stake<'info> {
+    #[account(mut)]
+    pub stake_pool: Account<'info, StakePool>,
+    #[account(
+        init_if_needed,
+        payer = user,
+        space = 8 + UserStake::LEN
+    )]
+    pub user_stake: Account<'info, UserStake>,
+    #[account(mut)]
+    pub user_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub pool_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct LinkCard<'info> {
+    #[account(mut)]
+    pub stake_pool: Account<'info, StakePool>,
+    pub user_stake: Account<'info, UserStake>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UnlinkCard<'info> {
+    #[account(mut)]
+    pub stake_pool: Account<'info, StakePool>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ProcessBNPL<'info> {
+    pub stake_pool: Account<'info, StakePool>,
+    pub user_stake: Account<'info, UserStake>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+#[account]
+pub struct UserStake {
+    pub user: Pubkey,
+    pub amount: u64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct CardInfo {
+    pub card_id: String,
+    pub status: CardStatus,
+    pub linked_at: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub enum CardStatus {
+    Linked,
+    Unlinked,
+}
+
+#[error_code]
+pub enum StakePoolError {
+    #[msg("No stake found for user")]
+    NoStakeFound,
+    #[msg("No linked credit card found")]
+    NoLinkedCard,
+    #[msg("Transaction amount exceeds credit limit")]
+    ExceedsCreditLimit,
+}
+
+impl UserStake {
+    pub const LEN: usize = 32 + 8;
 }

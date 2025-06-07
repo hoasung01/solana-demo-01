@@ -1,0 +1,108 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# BNPL Implementation Details
+
+## Frontend Components
+
+### 1. Wallet Connection (`src/components/solana/wallet-connect.tsx`)
+- Handles Phantom wallet connection
+- Displays wallet balance and stake information
+- Shows estimated credit limit (30% of stake)
+
+### 2. Credit Card Management (`src/components/credit-card/card-list.tsx`)
+- Lists user's credit cards
+- Handles card linking/unlinking
+- Shows card status and last 4 digits
+
+### 3. BNPL Transaction (`src/components/bnpl/transaction-form.tsx`)
+- Processes BNPL transactions
+- Validates wallet connection and card status
+- Shows transaction status and errors
+
+## Smart Contract
+
+### 1. Stake Pool Program (`programs/stake-pool/src/lib.rs`)
+- Manages staked tokens
+- Handles credit card linking
+- Processes BNPL transactions
+
+### Key Features
+
+#### Credit Card Management
+```rust
+pub fn link_credit_card(ctx: Context<LinkCard>, card_id: String) -> Result<()> {
+    // Verify stake exists
+    // Link card to wallet
+}
+
+pub fn unlink_credit_card(ctx: Context<UnlinkCard>, card_id: String) -> Result<()> {
+    // Remove card link
+}
+```
+
+#### BNPL Transaction
+```rust
+pub fn process_bnpl_transaction(ctx: Context<ProcessBNPL>, amount: u64) -> Result<()> {
+    // Verify stake exists
+    // Check card link
+    // Calculate credit limit
+    // Process transaction
+}
+```
+
+## Flow Diagram
+
+```mermaid
+flowchart TD
+    A[User] --> B[Connect Wallet]
+    B --> C[View Balance & Stake]
+    C --> D[Add Credit Card]
+    D --> E[Link Card]
+    E --> F[Use BNPL]
+    F --> G[Process Transaction]
+    G --> H[Update Status]
+```
+
+## Security Considerations
+
+1. Wallet Connection
+   - Verify wallet ownership
+   - Check stake amount
+   - Validate credit limit
+
+2. Credit Card Management
+   - Secure card storage
+   - Link verification
+   - Status tracking
+
+3. BNPL Transactions
+   - Amount validation
+   - Credit limit checks
+   - Transaction security
+
+## Testing
+
+1. Unit Tests
+   - Wallet connection
+   - Card management
+   - Transaction processing
+
+2. Integration Tests
+   - End-to-end flow
+   - Error handling
+   - Edge cases
+
+## Deployment
+
+1. Smart Contract
+   - Deploy stake pool program
+   - Initialize pool
+   - Set parameters
+
+2. Frontend
+   - Deploy Next.js app
+   - Configure environment
+   - Test integration

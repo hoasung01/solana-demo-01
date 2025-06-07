@@ -1,20 +1,25 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Inter } from "next/font/google";
-import { ClientLayout } from '@/components/client-layout';
+import { Toaster } from 'sonner';
+import { WalletProvider } from '@/components/providers/wallet-provider';
+import { MainLayout } from '@/components/layout/main-layout';
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Solana Stake Pool Demo',
-  description: 'A demo of Solana stake pool functionality',
+  title: 'Solana BNPL',
+  description: 'Buy Now Pay Later on Solana',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        <ClientLayout>{children}</ClientLayout>
+        <WalletProvider>
+          <MainLayout>{children}</MainLayout>
+          <Toaster />
+        </WalletProvider>
       </body>
     </html>
   )
