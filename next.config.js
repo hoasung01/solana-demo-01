@@ -7,12 +7,9 @@ const nextConfig = {
     };
     return config;
   },
-  experimental: {
-    turbo: {
-      rules: {
-        // Configure Turbopack rules
-        '*.css': ['postcss'],
-      },
+  turbopack: {
+    rules: {
+      '*.css': ['postcss'],
     },
   },
 };
