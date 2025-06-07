@@ -33,7 +33,8 @@ export function CreditLimit() {
         const stakeInfo = await getStakeInfo();
         if (stakeInfo) {
           const totalLimit = stakeInfo.totalStaked.muln(CREDIT_LIMIT_PERCENTAGE).divn(100);
-          const usedAmount = stakeInfo.usedCredit;
+          // For now, we'll set usedAmount to 0 since it's not available in the stake info
+          const usedAmount = new BN(0);
           const availableAmount = totalLimit.sub(usedAmount);
 
           setCreditInfo({
