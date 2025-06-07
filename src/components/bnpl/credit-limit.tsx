@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useStakePool } from '@/hooks/use-stake-pool';
 import { CREDIT_LIMIT_PERCENTAGE } from '@/lib/constants';
-import BN from 'bn.js';
 
 interface CreditLimitInfo {
   totalLimit: number;
@@ -32,16 +31,16 @@ export function CreditLimit() {
       try {
         const stakeInfo = await getStakeInfo();
         if (stakeInfo) {
-          const totalLimit = stakeInfo.totalStaked.muln(CREDIT_LIMIT_PERCENTAGE).divn(100);
+          const totalLimit = stakeInfo.totalStaked * (CREDIT_LIMIT_PERCENTAGE / 100);
           // For now, we'll set usedAmount to 0 since it's not available in the stake info
-          const usedAmount = new BN(0);
-          const availableAmount = totalLimit.sub(usedAmount);
+          const usedAmount = 0;
+          const availableAmount = totalLimit - usedAmount;
 
           setCreditInfo({
-            totalLimit: Number(totalLimit) / 1e9,
-            usedAmount: Number(usedAmount) / 1e9,
-            availableAmount: Number(availableAmount) / 1e9,
-            stakeAmount: Number(stakeInfo.totalStaked) / 1e9,
+            totalLimit,
+            usedAmount,
+            availableAmount,
+            stakeAmount: stakeInfo.totalStaked,
           });
         }
       } catch (error) {
