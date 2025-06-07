@@ -14,20 +14,38 @@ alwaysApply: false
 5. System processes transaction
 6. System updates stake status
 
-## Credit Card Integration
+## Component Integration
 
-### Card Linking
-1. User enters card details
-2. System validates card
-3. System stores card reference
-4. System links card to wallet
+### Wallet Connection
+- Handled by [src/components/solana/wallet-connect.tsx](mdc:src/components/solana/wallet-connect.tsx)
+- Manages wallet state
+- Displays balance
+
+### Card Management
+- Implemented in [src/components/credit-card/card-list.tsx](mdc:src/components/credit-card/card-list.tsx)
+- Card validation
+- Secure storage
+- Status tracking
 
 ### Transaction Processing
-1. Validate transaction amount
-2. Check stake coverage
-3. Process payment
-4. Update stake status
-5. Record transaction
+- Main logic in [src/components/bnpl/TransactionForm.tsx](mdc:src/components/bnpl/TransactionForm.tsx)
+- Amount validation
+- Stake verification
+- Status updates
+
+## Smart Contract Integration
+
+### Program Instructions
+Defined in [programs/stake-pool/src/lib.rs](mdc:programs/stake-pool/src/lib.rs):
+1. `LinkCard` - Links credit card
+2. `UnlinkCard` - Removes card link
+3. `ProcessBnplTransaction` - Processes transaction
+
+### Client Integration
+Implemented in [src/hooks/use-stake-pool.ts](mdc:src/hooks/use-stake-pool.ts):
+1. Card linking
+2. Transaction processing
+3. Status updates
 
 ## Security Measures
 

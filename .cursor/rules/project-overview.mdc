@@ -3,3 +3,38 @@ description:
 globs:
 alwaysApply: false
 ---
+# Solana Staking and BNPL Project Overview
+
+This project implements a Solana-based staking pool with BNPL (Buy Now, Pay Later) functionality. The system allows users to stake SOL tokens and use them as collateral for BNPL transactions.
+
+## Core Components
+
+### Frontend Application
+- Built with Next.js and TypeScript
+- Main application code in [src/app/page.tsx](mdc:src/app/page.tsx)
+- Staking interface in [src/components/stake/StakeManager.tsx](mdc:src/components/stake/StakeManager.tsx)
+- BNPL components in [src/components/bnpl/](mdc:src/components/bnpl/)
+
+### Smart Contracts
+- Stake Pool Program in [programs/stake-pool/src/lib.rs](mdc:programs/stake-pool/src/lib.rs)
+- Program ID defined in [src/lib/constants.ts](mdc:src/lib/constants.ts)
+
+### Key Features
+1. SOL token staking
+2. Credit card linking
+3. BNPL transaction processing
+4. Reward distribution
+5. Stake management
+
+## Development Guidelines
+1. Follow TypeScript best practices
+2. Maintain proper error handling
+3. Keep UI components modular
+4. Document all major functions
+5. Test thoroughly before deployment
+
+## Important Files
+- [package.json](mdc:package.json) - Project dependencies
+- [next.config.js](mdc:next.config.js) - Next.js configuration
+- [tsconfig.json](mdc:tsconfig.json) - TypeScript settings
+- [.env.example](mdc:.env.example) - Environment variables template

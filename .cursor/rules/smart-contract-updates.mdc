@@ -14,12 +14,20 @@ alwaysApply: false
 4. Improved error handling
 5. Added security checks
 
-### Planned Updates
-1. Multi-token support
-2. Enhanced reward system
-3. Advanced stake management
-4. Improved transaction processing
-5. Additional security features
+### Program Structure
+Main program file: [programs/stake-pool/src/lib.rs](mdc:programs/stake-pool/src/lib.rs)
+
+### Client Integration
+Updated in [src/hooks/use-stake-pool.ts](mdc:src/hooks/use-stake-pool.ts):
+1. Program initialization
+2. Transaction handling
+3. Error management
+
+### Constants
+Updated in [src/lib/constants.ts](mdc:src/lib/constants.ts):
+1. Program ID
+2. Fee structures
+3. Error messages
 
 ## Development Process
 

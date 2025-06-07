@@ -3,3 +3,54 @@ description:
 globs:
 alwaysApply: false
 ---
+# BNPL Implementation
+
+## Core Features
+
+### Stake Management
+Implemented in [src/hooks/use-stake-pool.ts](mdc:src/hooks/use-stake-pool.ts):
+1. Minimum stake requirements
+2. Stake verification
+3. Stake updates
+4. Reward distribution
+5. Unstaking process
+
+### Card Management
+Implemented in [src/components/credit-card/card-list.tsx](mdc:src/components/credit-card/card-list.tsx):
+1. Card validation
+2. Secure storage
+3. Card linking
+4. Card unlinking
+5. Card updates
+
+### Transaction Processing
+Implemented in [src/components/bnpl/TransactionForm.tsx](mdc:src/components/bnpl/TransactionForm.tsx):
+1. Amount validation
+2. Stake coverage check
+3. Payment processing
+4. Status updates
+5. Error handling
+
+## Smart Contract Integration
+
+### Program Instructions
+Defined in [programs/stake-pool/src/lib.rs](mdc:programs/stake-pool/src/lib.rs):
+1. BNPL instructions
+2. Account structures
+3. Security checks
+4. Error handling
+5. Event logging
+
+### Constants
+Defined in [src/lib/constants.ts](mdc:src/lib/constants.ts):
+1. Transaction limits
+2. Fee structures
+3. Error messages
+4. Status codes
+
+## Security Considerations
+1. Data encryption
+2. Access control
+3. Input validation
+4. Error handling
+5. Audit logging

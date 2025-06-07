@@ -3,3 +3,50 @@ description:
 globs:
 alwaysApply: false
 ---
+# Solana Program Structure
+
+## Stake Pool Program
+
+The stake pool program is implemented in Rust and handles all staking-related operations. The main program file is [programs/stake-pool/src/lib.rs](mdc:programs/stake-pool/src/lib.rs).
+
+### Program Instructions
+1. `Initialize` - Creates a new stake pool
+2. `Stake` - Allows users to stake SOL
+3. `Unstake` - Allows users to withdraw staked SOL
+4. `LinkCard` - Links a credit card to a user's account
+5. `UnlinkCard` - Removes a credit card link
+6. `ProcessBnplTransaction` - Processes BNPL transactions
+
+### Account Structures
+1. `StakePool` - Main pool account
+   - Total staked amount
+   - Reward rate
+   - Authority
+   - Last update time
+
+2. `StakeAccount` - User's stake account
+   - Staked amount
+   - Reward amount
+   - Last claim time
+
+### Client Integration
+The program is integrated with the frontend through [src/hooks/use-stake-pool.ts](mdc:src/hooks/use-stake-pool.ts), which provides:
+- Program initialization
+- Stake management
+- Transaction processing
+- Error handling
+
+### Constants
+Program-related constants are defined in [src/lib/constants.ts](mdc:src/lib/constants.ts):
+- Program ID
+- Minimum stake amount
+- Maximum stake amount
+- Fee percentages
+- Error messages
+
+## Development Guidelines
+1. Follow Solana program best practices
+2. Implement proper error handling
+3. Add comprehensive tests
+4. Document all instructions
+5. Maintain security checks
