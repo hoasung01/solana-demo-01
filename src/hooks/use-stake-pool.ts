@@ -223,6 +223,74 @@ export function useStakePool() {
     }
   }, [wallet, connection, stakePoolPda]);
 
+  const linkCard = useCallback(async (cardNumber: string, expiryDate: string, cvv: string) => {
+    if (!wallet.publicKey || !stakePoolPda) {
+      throw new Error('Wallet or stake pool not initialized');
+    }
+
+    try {
+      const transaction = new Transaction();
+
+      // Convert card details to buffer
+      const cardData = Buffer.from(JSON.stringify({
+        cardNumber,
+        expiryDate,
+        cvv,
+      }));
+
+      transaction.add(
+        new TransactionInstruction({
+          keys: [
+            { pubkey: stakePoolPda, isSigner: false, isWritable: true },
+            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+          ],
+          programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
+          data: Buffer.from([
+            INSTRUCTION_INDEX.LINK_CARD,
+            ...cardData,
+          ]),
+        })
+      );
+
+      const signature = await wallet.sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature);
+
+      return true;
+    } catch (err) {
+      console.error('Error linking card:', err);
+      return false;
+    }
+  }, [wallet, connection, stakePoolPda]);
+
+  const unlinkCard = useCallback(async () => {
+    if (!wallet.publicKey || !stakePoolPda) {
+      throw new Error('Wallet or stake pool not initialized');
+    }
+
+    try {
+      const transaction = new Transaction();
+
+      transaction.add(
+        new TransactionInstruction({
+          keys: [
+            { pubkey: stakePoolPda, isSigner: false, isWritable: true },
+            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+          ],
+          programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
+          data: Buffer.from([INSTRUCTION_INDEX.UNLINK_CARD]),
+        })
+      );
+
+      const signature = await wallet.sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature);
+
+      return true;
+    } catch (err) {
+      console.error('Error unlinking card:', err);
+      return false;
+    }
+  }, [wallet, connection, stakePoolPda]);
+
   return {
     loading,
     error,
@@ -231,5 +299,7 @@ export function useStakePool() {
     stake,
     unstake,
     processBNPLTransaction,
+    linkCard,
+    unlinkCard,
   };
 }
