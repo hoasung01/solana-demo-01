@@ -50,10 +50,11 @@ export function ExplorerLink({
 
 export function ClusterChecker({ children }: { children: ReactNode }) {
   const { connection } = useConnection()
-  const { cluster } = useWallet()
+  const network = connection.rpcEndpoint.includes('devnet') ? 'devnet' :
+                 connection.rpcEndpoint.includes('testnet') ? 'testnet' : 'mainnet-beta'
 
   const query = useQuery({
-    queryKey: ['version', { cluster, endpoint: connection.rpcEndpoint }],
+    queryKey: ['version', { network, endpoint: connection.rpcEndpoint }],
     queryFn: () => connection.getVersion(),
     retry: 1,
   })
@@ -71,7 +72,7 @@ export function ClusterChecker({ children }: { children: ReactNode }) {
           </Button>
         }
       >
-        Error connecting to cluster <span className="font-bold">{cluster}</span>.
+        Error connecting to cluster <span className="font-bold">{network}</span>.
       </AppAlert>
     )
   }
