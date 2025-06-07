@@ -1,0 +1,55 @@
+declare module 'bn.js' {
+  class BN {
+    constructor(number: number | string | BN, base?: number | 'hex', endian?: string);
+    toString(base?: number | 'hex'): string;
+    toNumber(): number;
+    toJSON(): string;
+    toArray(endian?: string, length?: number): number[];
+    toBuffer(endian?: string, length?: number): Buffer;
+    bitLength(): number;
+    zeroBits(): number;
+    byteLength(): number;
+    isNeg(): boolean;
+    isEven(): boolean;
+    isOdd(): boolean;
+    isZero(): boolean;
+    cmp(b: BN): number;
+    lt(b: BN): boolean;
+    lte(b: BN): boolean;
+    gt(b: BN): boolean;
+    gte(b: BN): boolean;
+    eq(b: BN): boolean;
+    isBN(b: any): boolean;
+    add(b: BN): BN;
+    iadd(b: BN): BN;
+    sub(b: BN): BN;
+    isub(b: BN): BN;
+    mul(b: BN): BN;
+    imul(b: BN): BN;
+    div(b: BN): BN;
+    idiv(b: BN): BN;
+    mod(b: BN): BN;
+    umod(b: BN): BN;
+    divRound(b: BN): BN;
+    or(b: BN): BN;
+    ior(b: BN): BN;
+    and(b: BN): BN;
+    iand(b: BN): BN;
+    xor(b: BN): BN;
+    ixor(b: BN): BN;
+    setn(b: number): BN;
+    shln(b: number): BN;
+    ishln(b: number): BN;
+    shrn(b: number): BN;
+    ishrn(b: number): BN;
+    testn(b: number): boolean;
+    maskn(b: number): BN;
+    imaskn(b: number): BN;
+    bincn(b: number): BN;
+    notn(w: number): BN;
+    gcd(b: BN): BN;
+    egcd(b: BN): { a: BN; b: BN; gcd: BN };
+    invm(b: BN): BN;
+  }
+  export = BN;
+}
