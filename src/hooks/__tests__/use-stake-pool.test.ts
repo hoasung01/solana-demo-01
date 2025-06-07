@@ -1,7 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { useStakePool } from '../use-stake-pool';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider } from '@project-serum/anchor';
+import { Program } from '@project-serum/anchor';
 import { BN } from 'bn.js';
 import { web3 } from '@project-serum/anchor';
 
@@ -14,7 +14,6 @@ jest.mock('@solana/wallet-adapter-react', () => ({
 // Mock the Anchor Program
 jest.mock('@project-serum/anchor', () => ({
   Program: jest.fn(),
-  AnchorProvider: jest.fn(),
   web3: {
     PublicKey: jest.fn(),
     LAMPORTS_PER_SOL: 1e9,

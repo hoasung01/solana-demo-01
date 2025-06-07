@@ -21,14 +21,6 @@ const INSTRUCTION_INDEX = {
   PROCESS_BNPL: 6,
 };
 
-// Account data structure
-interface StakePoolData {
-  totalStaked: BN;
-  rewardRate: BN;
-  lastUpdateTime: BN;
-  authority: PublicKey;
-}
-
 export function useStakePool() {
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -203,4 +195,4 @@ export function useStakePool() {
     stake,
     unstake,
   };
-} 
+}

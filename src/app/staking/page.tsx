@@ -43,7 +43,7 @@ export default function StakingPage() {
           </ul>
           <p>
             Your credit limit is calculated as 30% of your total staked amount.
-            For example, if you stake 100 SOL, you'll get a credit limit of 30 SOL.
+            For example, if you stake 100 SOL, you&apos;ll get a credit limit of 30 SOL.
           </p>
         </div>
       </Card>

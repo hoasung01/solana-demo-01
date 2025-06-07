@@ -460,6 +460,14 @@ export function StakeForm() {
         checkInitialConnection();
     }, [isOnline]);
 
+    useEffect(() => {
+        // ... existing code ...
+    }, [checkInitialConnection]); // Add checkInitialConnection to the dependency array
+
+    useEffect(() => {
+        // ... existing code ...
+    }, [checkInitialConnection]); // Add checkInitialConnection to the dependency array
+
     const handleStake = async () => {
         if (!publicKey) {
             toast.error('Vui lòng kết nối ví');
