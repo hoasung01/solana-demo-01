@@ -6,13 +6,13 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useStakePool } from '@/hooks/use-stake-pool';
 import { CREDIT_LIMIT_PERCENTAGE } from '@/lib/constants';
-import { BN } from 'bn.js';
+import BN from 'bn.js';
 
 interface CreditLimitInfo {
-  totalLimit: BN;
-  usedAmount: BN;
-  availableAmount: BN;
-  stakeAmount: BN;
+  totalLimit: number;
+  usedAmount: number;
+  availableAmount: number;
+  stakeAmount: number;
 }
 
 export function CreditLimit() {
@@ -37,10 +37,10 @@ export function CreditLimit() {
           const availableAmount = totalLimit.sub(usedAmount);
 
           setCreditInfo({
-            totalLimit,
-            usedAmount,
-            availableAmount,
-            stakeAmount: stakeInfo.totalStaked,
+            totalLimit: Number(totalLimit) / 1e9,
+            usedAmount: Number(usedAmount) / 1e9,
+            availableAmount: Number(availableAmount) / 1e9,
+            stakeAmount: Number(stakeInfo.totalStaked) / 1e9,
           });
         }
       } catch (error) {
@@ -81,9 +81,9 @@ export function CreditLimit() {
     );
   }
 
-  const usedPercentage = creditInfo.totalLimit.isZero()
+  const usedPercentage = creditInfo.totalLimit === 0
     ? 0
-    : (creditInfo.usedAmount.muln(100).div(creditInfo.totalLimit)).toNumber();
+    : (creditInfo.usedAmount / creditInfo.totalLimit) * 100;
 
   return (
     <Card className="p-4">
@@ -93,7 +93,7 @@ export function CreditLimit() {
         <div>
           <div className="flex justify-between text-sm mb-2">
             <span>Used Credit</span>
-            <span>{(Number(creditInfo.usedAmount) / 1e9).toFixed(3)} SOL</span>
+            <span>{creditInfo.usedAmount.toFixed(3)} SOL</span>
           </div>
           <Progress value={usedPercentage} className="h-2" />
         </div>
@@ -102,13 +102,13 @@ export function CreditLimit() {
           <div>
             <p className="text-sm text-muted-foreground">Total Limit</p>
             <p className="text-lg font-semibold">
-              {(Number(creditInfo.totalLimit) / 1e9).toFixed(3)} SOL
+              {creditInfo.totalLimit.toFixed(3)} SOL
             </p>
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Available</p>
             <p className="text-lg font-semibold">
-              {(Number(creditInfo.availableAmount) / 1e9).toFixed(3)} SOL
+              {creditInfo.availableAmount.toFixed(3)} SOL
             </p>
           </div>
         </div>
@@ -116,7 +116,7 @@ export function CreditLimit() {
         <div className="pt-4 border-t">
           <p className="text-sm text-muted-foreground">Total Staked</p>
           <p className="text-lg font-semibold">
-            {(Number(creditInfo.stakeAmount) / 1e9).toFixed(3)} SOL
+            {creditInfo.stakeAmount.toFixed(3)} SOL
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Credit limit is {CREDIT_LIMIT_PERCENTAGE}% of your total stake
