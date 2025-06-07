@@ -1,21 +1,19 @@
 'use client'
 
+import { FC, ReactNode } from 'react'
 import dynamic from 'next/dynamic'
-import { ReactNode } from 'react'
-import { createSolanaDevnet, createSolanaLocalnet, createWalletUiConfig, WalletUi } from '@wallet-ui/react'
-import '@wallet-ui/tailwind/index.css'
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
+import { clusterApiUrl } from '@solana/web3.js'
 
-export const WalletButton = dynamic(async () => (await import('@wallet-ui/react')).WalletUiDropdown, {
-  ssr: false,
-})
-export const ClusterButton = dynamic(async () => (await import('@wallet-ui/react')).WalletUiClusterDropdown, {
+export const WalletButton = dynamic(async () => WalletMultiButton, {
   ssr: false,
 })
 
-const config = createWalletUiConfig({
-  clusters: [createSolanaDevnet(), createSolanaLocalnet()],
-})
+export const ClusterButton: FC<{ children: ReactNode }> = ({ children }) => {
+  return <div>{children}</div>
+}
 
 export function SolanaProvider({ children }: { children: ReactNode }) {
-  return <WalletUi config={config}>{children}</WalletUi>
+  return <div>{children}</div>
 }
