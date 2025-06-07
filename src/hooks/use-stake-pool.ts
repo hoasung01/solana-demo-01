@@ -98,12 +98,16 @@ export function useStakePool() {
       const rewardRate = new BN(data.slice(8, 16), 'le');
       const lastUpdateTime = new BN(data.slice(16, 24), 'le');
       const authority = new PublicKey(data.slice(24, 56));
+      const creditLimit = totalStaked.muln(CREDIT_LIMIT_PERCENTAGE).divn(100);
+      const usedCredit = new BN(0); // For now, we'll set this to 0
 
       return {
         totalStaked,
         rewardRate,
         lastUpdateTime,
         authority,
+        creditLimit,
+        usedCredit,
       };
     } catch (err) {
       console.error('Error fetching stake info:', err);

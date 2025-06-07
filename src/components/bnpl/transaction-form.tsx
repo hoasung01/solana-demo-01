@@ -11,6 +11,7 @@ import { AlertCircle } from 'lucide-react';
 import { useStakePool } from '@/hooks/use-stake-pool';
 import { toast } from 'sonner';
 import { MIN_STAKE_AMOUNT } from '@/lib/constants';
+import { BN } from '@/lib/constants';
 
 export function BNPLTransactionForm() {
   const { publicKey, connected } = useWallet();
@@ -40,7 +41,7 @@ export function BNPLTransactionForm() {
         throw new Error('Failed to fetch stake information');
       }
 
-      const availableCredit = Number(stakeInfo.creditLimit.sub(stakeInfo.usedCredit)) / 1e9;
+      const availableCredit = Number(stakeInfo.creditLimit?.sub(stakeInfo.usedCredit || new BN(0))) / 1e9;
       if (amountNum > availableCredit) {
         throw new Error(`Amount exceeds available credit limit of ${availableCredit.toFixed(3)} SOL`);
       }
