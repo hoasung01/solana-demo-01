@@ -352,12 +352,12 @@ export function AccountTransfer({ address }: { address: PublicKey }) {
 }
 
 export function AccountAirdrop({ address }: { address: PublicKey }) {
-  const { toast } = useToast()
   const airdrop = useRequestAirdrop({ address })
+  const { toast } = useToast()
 
   const handleAirdrop = async () => {
     try {
-      await airdrop.mutateAsync()
+      await airdrop.mutateAsync(1)
       toast({
         title: 'Success',
         description: 'Airdrop requested successfully',
