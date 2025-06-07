@@ -6,7 +6,8 @@ import { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { AppAlert } from '@/components/app-alert'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { PublicKey } from '@solana/web3.js'
+import { PublicKey, Connection } from '@solana/web3.js'
+import { useConnection } from '@solana/wallet-adapter-react'
 
 interface ExplorerLinkProps {
   address?: string
@@ -48,17 +49,19 @@ export function ExplorerLink({
 }
 
 export function ClusterChecker({ children }: { children: ReactNode }) {
-  const { client } = useWallet()
+  const { connection } = useConnection()
   const { cluster } = useWallet()
 
   const query = useQuery({
-    queryKey: ['version', { cluster, endpoint: cluster.urlOrMoniker }],
-    queryFn: () => client.rpc.getVersion(),
+    queryKey: ['version', { cluster, endpoint: connection.rpcEndpoint }],
+    queryFn: () => connection.getVersion(),
     retry: 1,
   })
+
   if (query.isLoading) {
     return null
   }
+
   if (query.isError || !query.data) {
     return (
       <AppAlert
@@ -68,9 +71,10 @@ export function ClusterChecker({ children }: { children: ReactNode }) {
           </Button>
         }
       >
-        Error connecting to cluster <span className="font-bold">{cluster.label}</span>.
+        Error connecting to cluster <span className="font-bold">{cluster}</span>.
       </AppAlert>
     )
   }
+
   return children
 }
