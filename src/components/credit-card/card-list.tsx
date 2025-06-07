@@ -111,8 +111,14 @@ export function CardList() {
     }
   };
 
-  const handleAddCard = (card: CreditCard) => {
-    setCards(prevCards => [...prevCards, card]);
+  const handleAddCard = (card: { type: string; number: string }) => {
+    const newCard: CreditCard = {
+      id: Math.random().toString(36).substr(2, 9),
+      type: card.type,
+      number: card.number,
+      status: 'unlinked',
+    };
+    setCards(prevCards => [...prevCards, newCard]);
     setShowNewCardModal(false);
   };
 
@@ -186,7 +192,7 @@ export function CardList() {
       <NewCardModal
         open={showNewCardModal}
         onOpenChange={setShowNewCardModal}
-        onAddCard={handleAddCard}
+        onCardAdded={handleAddCard}
       />
     </div>
   );
