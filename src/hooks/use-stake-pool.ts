@@ -22,14 +22,14 @@ const INSTRUCTION_INDEX = {
 
 export function useStakePool() {
   const { connection } = useConnection();
-  const wallet = useWallet();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stakePoolPda, setStakePoolPda] = useState<PublicKey | null>(null);
 
   useEffect(() => {
     const initProgram = async () => {
-      if (!wallet.publicKey) {
+      if (!connected || !publicKey) {
         setLoading(false);
         return;
       }
@@ -51,11 +51,11 @@ export function useStakePool() {
     };
 
     initProgram();
-  }, [wallet.publicKey]);
+  }, [connected, publicKey]);
 
   const initializeStakePool = useCallback(async () => {
-    if (!wallet.publicKey || !stakePoolPda) {
-      throw new Error('Wallet or stake pool not initialized');
+    if (!connected || !publicKey || !stakePoolPda) {
+      throw new Error('Please connect your wallet first');
     }
 
     try {
@@ -64,7 +64,7 @@ export function useStakePool() {
         new TransactionInstruction({
           keys: [
             { pubkey: stakePoolPda, isSigner: false, isWritable: true },
-            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+            { pubkey: publicKey, isSigner: true, isWritable: true },
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
           ],
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
@@ -72,7 +72,7 @@ export function useStakePool() {
         })
       );
 
-      const signature = await wallet.sendTransaction(transaction, connection);
+      const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature);
 
       return true;
@@ -80,7 +80,7 @@ export function useStakePool() {
       console.error('Error initializing stake pool:', err);
       return false;
     }
-  }, [wallet, connection, stakePoolPda]);
+  }, [connected, publicKey, connection, stakePoolPda, sendTransaction]);
 
   const getStakeInfo = useCallback(async () => {
     if (!stakePoolPda) return null;
@@ -120,8 +120,8 @@ export function useStakePool() {
   }, [connection, stakePoolPda]);
 
   const stake = useCallback(async (amount: number) => {
-    if (!wallet.publicKey || !stakePoolPda) {
-      throw new Error('Wallet or stake pool not initialized');
+    if (!connected || !publicKey || !stakePoolPda) {
+      throw new Error('Please connect your wallet first');
     }
 
     try {
@@ -131,7 +131,7 @@ export function useStakePool() {
       // Add transfer instruction
       transaction.add(
         SystemProgram.transfer({
-          fromPubkey: wallet.publicKey,
+          fromPubkey: publicKey,
           toPubkey: stakePoolPda,
           lamports,
         })
@@ -142,7 +142,7 @@ export function useStakePool() {
         new TransactionInstruction({
           keys: [
             { pubkey: stakePoolPda, isSigner: false, isWritable: true },
-            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+            { pubkey: publicKey, isSigner: true, isWritable: true },
           ],
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([
@@ -152,7 +152,7 @@ export function useStakePool() {
         })
       );
 
-      const signature = await wallet.sendTransaction(transaction, connection);
+      const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature);
 
       return true;
@@ -160,11 +160,11 @@ export function useStakePool() {
       console.error('Error staking:', err);
       return false;
     }
-  }, [wallet, connection, stakePoolPda]);
+  }, [connected, publicKey, connection, stakePoolPda, sendTransaction]);
 
   const unstake = useCallback(async (amount: number) => {
-    if (!wallet.publicKey || !stakePoolPda) {
-      throw new Error('Wallet or stake pool not initialized');
+    if (!connected || !publicKey || !stakePoolPda) {
+      throw new Error('Please connect your wallet first');
     }
 
     try {
@@ -175,7 +175,7 @@ export function useStakePool() {
         new TransactionInstruction({
           keys: [
             { pubkey: stakePoolPda, isSigner: false, isWritable: true },
-            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+            { pubkey: publicKey, isSigner: true, isWritable: true },
           ],
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([
@@ -185,7 +185,7 @@ export function useStakePool() {
         })
       );
 
-      const signature = await wallet.sendTransaction(transaction, connection);
+      const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature);
 
       return true;
@@ -193,11 +193,11 @@ export function useStakePool() {
       console.error('Error unstaking:', err);
       return false;
     }
-  }, [wallet, connection, stakePoolPda]);
+  }, [connected, publicKey, connection, stakePoolPda, sendTransaction]);
 
   const processBNPLTransaction = useCallback(async (amount: number) => {
-    if (!wallet.publicKey || !stakePoolPda) {
-      throw new Error('Wallet or stake pool not initialized');
+    if (!connected || !publicKey || !stakePoolPda) {
+      throw new Error('Please connect your wallet first');
     }
 
     try {
@@ -208,7 +208,7 @@ export function useStakePool() {
         new TransactionInstruction({
           keys: [
             { pubkey: stakePoolPda, isSigner: false, isWritable: true },
-            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+            { pubkey: publicKey, isSigner: true, isWritable: true },
           ],
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([
@@ -218,7 +218,7 @@ export function useStakePool() {
         })
       );
 
-      const signature = await wallet.sendTransaction(transaction, connection);
+      const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature);
 
       return true;
@@ -226,11 +226,11 @@ export function useStakePool() {
       console.error('Error processing BNPL transaction:', err);
       return false;
     }
-  }, [wallet, connection, stakePoolPda]);
+  }, [connected, publicKey, connection, stakePoolPda, sendTransaction]);
 
   const linkCard = useCallback(async (cardNumber: string, expiryDate: string, cvv: string) => {
-    if (!wallet.publicKey || !stakePoolPda) {
-      throw new Error('Wallet or stake pool not initialized');
+    if (!connected || !publicKey || !stakePoolPda) {
+      throw new Error('Please connect your wallet first');
     }
 
     try {
@@ -247,7 +247,7 @@ export function useStakePool() {
         new TransactionInstruction({
           keys: [
             { pubkey: stakePoolPda, isSigner: false, isWritable: true },
-            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+            { pubkey: publicKey, isSigner: true, isWritable: true },
           ],
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([
@@ -257,7 +257,7 @@ export function useStakePool() {
         })
       );
 
-      const signature = await wallet.sendTransaction(transaction, connection);
+      const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature);
 
       return true;
@@ -265,11 +265,11 @@ export function useStakePool() {
       console.error('Error linking card:', err);
       return false;
     }
-  }, [wallet, connection, stakePoolPda]);
+  }, [connected, publicKey, connection, stakePoolPda, sendTransaction]);
 
   const unlinkCard = useCallback(async () => {
-    if (!wallet.publicKey || !stakePoolPda) {
-      throw new Error('Wallet or stake pool not initialized');
+    if (!connected || !publicKey || !stakePoolPda) {
+      throw new Error('Please connect your wallet first');
     }
 
     try {
@@ -279,14 +279,14 @@ export function useStakePool() {
         new TransactionInstruction({
           keys: [
             { pubkey: stakePoolPda, isSigner: false, isWritable: true },
-            { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+            { pubkey: publicKey, isSigner: true, isWritable: true },
           ],
           programId: new PublicKey(STAKE_POOL_PROGRAM_ID),
           data: Buffer.from([INSTRUCTION_INDEX.UNLINK_CARD]),
         })
       );
 
-      const signature = await wallet.sendTransaction(transaction, connection);
+      const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature);
 
       return true;
@@ -294,7 +294,7 @@ export function useStakePool() {
       console.error('Error unlinking card:', err);
       return false;
     }
-  }, [wallet, connection, stakePoolPda]);
+  }, [connected, publicKey, connection, stakePoolPda, sendTransaction]);
 
   return {
     loading,
