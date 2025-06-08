@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import 'tw-animate-css';
-
 @layer base {
   body {
     @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-white;
