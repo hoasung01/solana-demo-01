@@ -96,7 +96,7 @@ export function useStakePool() {
       const totalStaked = Number(data.readBigUInt64LE(0)) / LAMPORTS_PER_SOL;
       const rewardRate = Number(data.readBigUInt64LE(8)) / LAMPORTS_PER_SOL;
       const lastUpdateTime = Number(data.readBigUInt64LE(16));
-      const authority = new PublicKey(data.slice(24, 56));
+      const authority = new PublicKey(data.slice(24, 56)).toBase58();
       const creditLimit = totalStaked * (CREDIT_LIMIT_PERCENTAGE / 100);
       const usedCredit = 0; // For now, we'll set this to 0
 
