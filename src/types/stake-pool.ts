@@ -1,29 +1,24 @@
-import { BN } from 'bn.js';
 import { PublicKey } from '@solana/web3.js';
 
-export interface CreditCard {
-  id: string;
-  status: 'linked' | 'unlinked';
-}
-
-export interface StakePool {
+export interface StakePoolInfo {
+  totalStaked: number;
+  rewardRate: number;
+  lastUpdateTime: number;
   authority: PublicKey;
-  totalStaked: BN;
-  linkedCards: CreditCard[];
-  creditLimit: BN;
-  usedCredit: BN;
+  creditLimit: number;
+  usedCredit: number;
+  linkedCards: {
+    id: string;
+    lastFour: string;
+  }[];
 }
 
 export interface StakePoolProgram {
-  programId: PublicKey;
-  account: {
-    stakePool: StakePool;
-  };
-  methods: {
-    stake: (amount: BN) => Promise<void>;
-    unstake: (amount: BN) => Promise<void>;
-    linkCard: (cardId: string) => Promise<void>;
-    unlinkCard: (cardId: string) => Promise<void>;
-    processBnplTransaction: (amount: BN) => Promise<void>;
-  };
+  initialize: () => Promise<void>;
+  stake: (amount: number) => Promise<void>;
+  unstake: (amount: number) => Promise<void>;
+  claimRewards: () => Promise<void>;
+  linkCard: (cardNumber: string, expiryDate: string, cvv: string) => Promise<void>;
+  unlinkCard: () => Promise<void>;
+  processBnplTransaction: (amount: number) => Promise<void>;
 }

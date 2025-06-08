@@ -1,42 +1,19 @@
 import { renderHook, act } from '@testing-library/react';
 import { useStakePool } from '../use-stake-pool';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { Program } from '@project-serum/anchor';
-import { BN } from 'bn.js';
-import { web3 } from '@project-serum/anchor';
+import { PublicKey } from '@solana/web3.js';
 
-// Mock the wallet adapter hooks
+// Mock the hooks
 jest.mock('@solana/wallet-adapter-react', () => ({
   useWallet: jest.fn(),
   useConnection: jest.fn(),
 }));
 
-// Mock the Anchor Program
-jest.mock('@project-serum/anchor', () => ({
-  Program: jest.fn(),
-  web3: {
-    PublicKey: jest.fn(),
-    LAMPORTS_PER_SOL: 1e9,
-    findProgramAddressSync: jest.fn(),
-  },
-}));
-
 describe('useStakePool', () => {
-  const mockPublicKey = 'mock-public-key';
-  const mockProgram = {
-    methods: {
-      linkCard: jest.fn(),
-      unlinkCard: jest.fn(),
-      processBnplTransaction: jest.fn(),
-    },
-    account: {
-      stakePool: {
-        fetch: jest.fn(),
-      },
-    },
-    provider: {
-      sendAndConfirm: jest.fn(),
-    },
+  const mockPublicKey = new PublicKey('11111111111111111111111111111111');
+  const mockConnection = {
+    getAccountInfo: jest.fn(),
+    confirmTransaction: jest.fn(),
   };
 
   beforeEach(() => {
@@ -44,45 +21,54 @@ describe('useStakePool', () => {
     (useWallet as jest.Mock).mockReturnValue({
       publicKey: mockPublicKey,
       connected: true,
+      sendTransaction: jest.fn(),
     });
     (useConnection as jest.Mock).mockReturnValue({
-      connection: {},
+      connection: mockConnection,
     });
-    (Program as jest.Mock).mockReturnValue(mockProgram);
-    (web3.PublicKey.findProgramAddressSync as jest.Mock).mockReturnValue(['mock-pda']);
   });
 
-  it('should initialize program when wallet is connected', async () => {
+  it('should initialize stake pool successfully', async () => {
     const { result } = renderHook(() => useStakePool());
 
-    expect(result.current.program).toBeDefined();
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBeNull();
+    let success;
+    await act(async () => {
+      success = await result.current.initializeStakePool();
+    });
+
+    expect(success).toBe(true);
+    expect(mockConnection.confirmTransaction).toHaveBeenCalled();
   });
 
-  it('should handle program initialization error', async () => {
-    const error = new Error('Initialization failed');
-    (Program as jest.Mock).mockImplementation(() => {
-      throw error;
-    });
+  it('should handle initialization error', async () => {
+    const error = new Error('Failed to initialize');
+    mockConnection.confirmTransaction.mockRejectedValue(error);
 
     const { result } = renderHook(() => useStakePool());
 
-    expect(result.current.program).toBeNull();
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe(error.message);
+    let success;
+    await act(async () => {
+      success = await result.current.initializeStakePool();
+    });
+
+    expect(success).toBe(false);
   });
 
-  it('should fetch stake info successfully', async () => {
-    const mockStakeInfo = {
-      authority: 'mock-authority',
-      totalStaked: new BN(1000),
-      linkedCards: [],
-      creditLimit: new BN(300),
-      usedCredit: new BN(100),
+  it('should get stake info successfully', async () => {
+    const mockAccountInfo = {
+      data: Buffer.from([
+        // totalStaked: 1000 SOL
+        ...new Uint8Array(new BigUint64Array([BigInt(1000 * 1e9)]).buffer),
+        // rewardRate: 0.1 SOL
+        ...new Uint8Array(new BigUint64Array([BigInt(0.1 * 1e9)]).buffer),
+        // lastUpdateTime: 1234567890
+        ...new Uint8Array(new BigUint64Array([BigInt(1234567890)]).buffer),
+        // authority: mockPublicKey
+        ...mockPublicKey.toBytes(),
+      ]),
     };
 
-    mockProgram.account.stakePool.fetch.mockResolvedValue(mockStakeInfo);
+    mockConnection.getAccountInfo.mockResolvedValue(mockAccountInfo);
 
     const { result } = renderHook(() => useStakePool());
 
@@ -91,13 +77,20 @@ describe('useStakePool', () => {
       stakeInfo = await result.current.getStakeInfo();
     });
 
-    expect(stakeInfo).toEqual(mockStakeInfo);
-    expect(mockProgram.account.stakePool.fetch).toHaveBeenCalledWith('mock-pda');
+    expect(stakeInfo).toEqual({
+      totalStaked: 1000,
+      rewardRate: 0.1,
+      lastUpdateTime: 1234567890,
+      authority: mockPublicKey,
+      creditLimit: 300, // 30% of totalStaked
+      usedCredit: 0,
+      linkedCards: [],
+    });
   });
 
-  it('should handle stake info fetch error', async () => {
-    const error = new Error('Fetch failed');
-    mockProgram.account.stakePool.fetch.mockRejectedValue(error);
+  it('should handle get stake info error', async () => {
+    const error = new Error('Failed to get account info');
+    mockConnection.getAccountInfo.mockRejectedValue(error);
 
     const { result } = renderHook(() => useStakePool());
 
@@ -109,63 +102,131 @@ describe('useStakePool', () => {
     expect(stakeInfo).toBeNull();
   });
 
-  it('should link card successfully', async () => {
-    const cardId = 'test-card-id';
-    mockProgram.methods.linkCard.mockResolvedValue(undefined);
-
+  it('should stake successfully', async () => {
     const { result } = renderHook(() => useStakePool());
 
     let success;
     await act(async () => {
-      success = await result.current.linkCard(cardId);
+      success = await result.current.stake(1); // Stake 1 SOL
     });
 
     expect(success).toBe(true);
-    expect(mockProgram.methods.linkCard).toHaveBeenCalledWith(cardId);
+    expect(mockConnection.confirmTransaction).toHaveBeenCalled();
   });
 
-  it('should handle card linking error', async () => {
-    const cardId = 'test-card-id';
-    const error = new Error('Link failed');
-    mockProgram.methods.linkCard.mockRejectedValue(error);
+  it('should handle stake error', async () => {
+    const error = new Error('Failed to stake');
+    mockConnection.confirmTransaction.mockRejectedValue(error);
 
     const { result } = renderHook(() => useStakePool());
 
     let success;
     await act(async () => {
-      success = await result.current.linkCard(cardId);
+      success = await result.current.stake(1);
+    });
+
+    expect(success).toBe(false);
+  });
+
+  it('should unstake successfully', async () => {
+    const { result } = renderHook(() => useStakePool());
+
+    let success;
+    await act(async () => {
+      success = await result.current.unstake(1); // Unstake 1 SOL
+    });
+
+    expect(success).toBe(true);
+    expect(mockConnection.confirmTransaction).toHaveBeenCalled();
+  });
+
+  it('should handle unstake error', async () => {
+    const error = new Error('Failed to unstake');
+    mockConnection.confirmTransaction.mockRejectedValue(error);
+
+    const { result } = renderHook(() => useStakePool());
+
+    let success;
+    await act(async () => {
+      success = await result.current.unstake(1);
     });
 
     expect(success).toBe(false);
   });
 
   it('should process BNPL transaction successfully', async () => {
-    const amount = 1.5;
-    mockProgram.methods.processBnplTransaction.mockResolvedValue(undefined);
-
     const { result } = renderHook(() => useStakePool());
 
     let success;
     await act(async () => {
-      success = await result.current.processBNPLTransaction(amount);
+      success = await result.current.processBNPLTransaction(1); // Process 1 SOL BNPL
     });
 
     expect(success).toBe(true);
-    expect(mockProgram.methods.processBnplTransaction).toHaveBeenCalledWith(
-      expect.any(BN)
-    );
+    expect(mockConnection.confirmTransaction).toHaveBeenCalled();
   });
 
   it('should handle BNPL transaction error', async () => {
-    const amount = 1.5;
-    const error = new Error('Transaction failed');
-    mockProgram.methods.processBnplTransaction.mockRejectedValue(error);
+    const error = new Error('Failed to process BNPL transaction');
+    mockConnection.confirmTransaction.mockRejectedValue(error);
 
     const { result } = renderHook(() => useStakePool());
 
     let success;
     await act(async () => {
-      success = await result.current.processBNPLTransaction(amount);
+      success = await result.current.processBNPLTransaction(1);
+    });
+
+    expect(success).toBe(false);
+  });
+
+  it('should link card successfully', async () => {
+    const { result } = renderHook(() => useStakePool());
+
+    let success;
+    await act(async () => {
+      success = await result.current.linkCard('1234567890123456', '12/25', '123');
+    });
+
+    expect(success).toBe(true);
+    expect(mockConnection.confirmTransaction).toHaveBeenCalled();
+  });
+
+  it('should handle link card error', async () => {
+    const error = new Error('Failed to link card');
+    mockConnection.confirmTransaction.mockRejectedValue(error);
+
+    const { result } = renderHook(() => useStakePool());
+
+    let success;
+    await act(async () => {
+      success = await result.current.linkCard('1234567890123456', '12/25', '123');
+    });
+
+    expect(success).toBe(false);
+  });
+
+  it('should unlink card successfully', async () => {
+    const { result } = renderHook(() => useStakePool());
+
+    let success;
+    await act(async () => {
+      success = await result.current.unlinkCard();
+    });
+
+    expect(success).toBe(true);
+    expect(mockConnection.confirmTransaction).toHaveBeenCalled();
+  });
+
+  it('should handle unlink card error', async () => {
+    const error = new Error('Failed to unlink card');
+    mockConnection.confirmTransaction.mockRejectedValue(error);
+
+    const { result } = renderHook(() => useStakePool());
+
+    let success;
+    await act(async () => {
+      success = await result.current.unlinkCard();
     });
 
     expect(success).toBe(false);

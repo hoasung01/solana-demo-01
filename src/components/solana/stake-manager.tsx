@@ -11,7 +11,6 @@ import { AlertCircle } from 'lucide-react';
 import { useStakePool } from '@/hooks/use-stake-pool';
 import { toast } from 'sonner';
 import { MIN_STAKE_AMOUNT } from '@/lib/constants';
-import { BN } from 'bn.js';
 
 export function StakeManager() {
   const { publicKey, connected } = useWallet();
@@ -20,10 +19,11 @@ export function StakeManager() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [stakeInfo, setStakeInfo] = useState<{
-    totalStaked: BN;
-    rewardRate: BN;
-    lastUpdateTime: BN;
+    totalStaked: number;
+    rewardRate: number;
+    lastUpdateTime: number;
     authority: string;
+    usedCredit: number;
   } | null>(null);
   const [initializing, setInitializing] = useState(false);
 
@@ -79,9 +79,8 @@ export function StakeManager() {
     }
 
     if (stakeInfo) {
-      const totalStaked = Number(stakeInfo.totalStaked) / 1e9;
-      if (amountNum > totalStaked) {
-        return `Amount exceeds your total staked amount of ${totalStaked.toFixed(3)} SOL`;
+      if (amountNum > stakeInfo.totalStaked) {
+        return `Amount exceeds your total staked amount of ${stakeInfo.totalStaked.toFixed(3)} SOL`;
       }
     }
 
@@ -144,14 +143,12 @@ export function StakeManager() {
 
       // Check if unstaking would affect credit limit
       if (stakeInfo) {
-        const totalStaked = Number(stakeInfo.totalStaked) / 1e9;
-        const usedCredit = Number(stakeInfo.usedCredit) / 1e9;
-        const remainingStake = totalStaked - amountNum;
+        const remainingStake = stakeInfo.totalStaked - amountNum;
         const creditLimit = remainingStake * 0.3; // 30% of remaining stake
 
-        if (usedCredit > creditLimit) {
+        if (stakeInfo.usedCredit > creditLimit) {
           throw new Error(
-            `Cannot unstake ${amountNum} SOL as it would reduce your credit limit below your used credit of ${usedCredit.toFixed(3)} SOL`
+            `Cannot unstake ${amountNum} SOL as it would reduce your credit limit below your used credit of ${stakeInfo.usedCredit.toFixed(3)} SOL`
           );
         }
       }
@@ -236,7 +233,7 @@ export function StakeManager() {
         <div className="mb-4 p-3 rounded-lg bg-muted/50">
           <p className="text-sm text-muted-foreground">Total Staked</p>
           <p className="text-lg font-semibold">
-            {(Number(stakeInfo.totalStaked) / 1e9).toFixed(3)} SOL
+            {stakeInfo.totalStaked.toFixed(3)} SOL
           </p>
         </div>
       )}
@@ -251,12 +248,9 @@ export function StakeManager() {
             min={MIN_STAKE_AMOUNT}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="Enter amount in SOL"
+            placeholder="Enter amount to stake/unstake"
             disabled={loading}
           />
-          <p className="text-xs text-muted-foreground">
-            Minimum stake amount: {MIN_STAKE_AMOUNT} SOL
-          </p>
         </div>
 
         {error && (
@@ -266,21 +260,23 @@ export function StakeManager() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="flex gap-2">
           <Button
-            type="button"
+            type="submit"
             onClick={handleStake}
             disabled={loading}
+            className="flex-1"
           >
-            {loading ? 'Processing...' : 'Stake'}
+            {loading ? 'Staking...' : 'Stake'}
           </Button>
           <Button
-            type="button"
-            variant="outline"
+            type="submit"
             onClick={handleUnstake}
             disabled={loading}
+            variant="outline"
+            className="flex-1"
           >
-            {loading ? 'Processing...' : 'Unstake'}
+            {loading ? 'Unstaking...' : 'Unstake'}
           </Button>
         </div>
       </form>
