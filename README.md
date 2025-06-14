@@ -38,9 +38,104 @@ from the creators of Next.js.
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for
 more details.
 
-# Solana Staking Demo
+# Solana Demo Project
 
-Ứng dụng demo về staking SOL sử dụng Solana blockchain.
+A Solana-based application that integrates with Marinade Finance for liquid staking and credit card functionality.
+
+## Features
+
+### Liquid Staking with Marinade Finance
+- Stake SOL to receive mSOL tokens
+- Unstake mSOL back to SOL
+- Real-time mSOL price tracking
+- View your mSOL balance
+- Seamless integration with Marinade Finance's liquid staking protocol
+
+### Credit Card Integration
+- Use mSOL as collateral for credit card transactions
+- Real-time credit limit based on mSOL holdings
+- Secure transaction processing
+- Instant credit line updates
+
+## Technical Stack
+
+- **Frontend**: Next.js 14 with TypeScript
+- **UI Components**: Radix UI with Tailwind CSS
+- **Wallet Integration**: Solana Wallet Adapter
+- **Staking Protocol**: Marinade Finance
+- **State Management**: TanStack Query
+- **Notifications**: Sonner
+
+## Getting Started
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/solana-demo-01.git
+cd solana-demo-01
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Create a `.env.local` file with your configuration:
+```env
+NEXT_PUBLIC_RPC_ENDPOINT=your_rpc_endpoint
+```
+
+4. Run the development server:
+```bash
+npm run dev
+```
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── solana/
+│   │   ├── stake-manager.tsx    # Marinade Finance staking interface
+│   │   └── wallet-provider.tsx  # Wallet connection management
+│   └── ui/                      # Reusable UI components
+├── hooks/
+│   ├── use-marinade-staking.ts  # Marinade Finance integration
+│   └── use-stake-pool.ts        # Stake pool management
+└── lib/
+    └── constants.ts             # Application constants
+```
+
+## How It Works
+
+### Liquid Staking
+1. Connect your Solana wallet
+2. Stake SOL to receive mSOL tokens through Marinade Finance
+3. Monitor your mSOL balance and current exchange rate
+4. Unstake mSOL back to SOL when needed
+
+### Credit Card Integration
+1. Your credit limit is calculated based on your mSOL holdings
+2. Use your credit card for transactions
+3. mSOL serves as collateral for your credit line
+4. Real-time updates to your available credit based on mSOL value
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Marinade Finance](https://app.marinade.finance/) for their liquid staking protocol
+- [Solana](https://solana.com/) for the blockchain infrastructure
+- [Next.js](https://nextjs.org/) for the React framework
 
 ## Yêu cầu hệ thống
 
