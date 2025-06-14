@@ -35,3 +35,7 @@ export const ERROR_MESSAGES = {
   UNSTAKE_FAILED: 'Failed to unstake',
   PROGRAM_ERROR: 'Program error occurred',
 } as const;
+
+// Marinade Finance Constants
+export const MARINADE_STATE_ADDRESS = '8szGkuLTAux9XMgZ2vtY39jVSowEcpBfWfDgDpXp2G5Z';
+export const MSOL_MINT = 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So';

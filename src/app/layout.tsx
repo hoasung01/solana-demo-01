@@ -4,22 +4,31 @@ import { Inter } from "next/font/google";
 import { Toaster } from 'sonner';
 import { WalletProvider } from '@/components/providers/wallet-provider';
 import { MainLayout } from '@/components/layout/main-layout';
+import { Providers } from '@/components/providers';
+import { AppHeader } from '@/components/app-header';
+import { AppFooter } from '@/components/app-footer';
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Solana BNPL',
-  description: 'Buy Now Pay Later on Solana',
+  title: 'mSOL Payments',
+  description: 'Pay for real-world utilities with your staked SOL',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        <WalletProvider>
-          <MainLayout>{children}</MainLayout>
+        <Providers>
+          <div className="min-h-screen flex flex-col">
+            <AppHeader />
+            <main className="flex-1 container mx-auto px-4 py-8">
+              {children}
+            </main>
+            <AppFooter />
+          </div>
           <Toaster />
-        </WalletProvider>
+        </Providers>
       </body>
     </html>
   )
