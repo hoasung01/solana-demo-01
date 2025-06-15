@@ -1,166 +1,133 @@
 'use client';
 
+import { useDevnetStaking } from '@/hooks/use-devnet-staking';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useMarinadeStaking } from '@/hooks/use-marinade-staking';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useState } from 'react';
-import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const WalletMultiButton = dynamic(
+  async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
+  { ssr: false }
+);
 
 export default function StakePage() {
   const { publicKey } = useWallet();
-  const { purchaseAndStake, unstake, isPurchasingAndStaking, isUnstaking, data: marinadeData } = useMarinadeStaking();
+  const { solBalance, mSolBalance, stakingStats, stakeSol, unstakeSol, isStaking, isUnstaking } = useDevnetStaking();
   const [stakeAmount, setStakeAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
 
   if (!publicKey) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <h1 className="text-2xl font-bold">Stake SOL</h1>
-        <p className="text-muted-foreground">Please connect your wallet to continue</p>
+        <h2 className="text-2xl font-bold">Connect your wallet to start staking</h2>
+        <WalletMultiButton />
       </div>
     );
   }
 
-  const handleStake = async () => {
-    if (!stakeAmount) return;
-    await purchaseAndStake({ amount: parseFloat(stakeAmount) });
-    setStakeAmount('');
-  };
-
-  const handleUnstake = async () => {
-    if (!unstakeAmount) return;
-    await unstake({ amount: parseFloat(unstakeAmount) });
-    setUnstakeAmount('');
-  };
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Stake SOL</h1>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Staking Stats */}
         <Card>
           <CardHeader>
-            <CardTitle>Stake SOL</CardTitle>
-            <CardDescription>Stake your SOL to earn rewards</CardDescription>
+            <CardTitle>Staking Stats</CardTitle>
+            <CardDescription>Your current staking performance</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="stake-amount">Amount to Stake</Label>
-                <Input
-                  id="stake-amount"
-                  type="number"
-                  value={stakeAmount}
-                  onChange={(e) => setStakeAmount(e.target.value)}
-                  placeholder="Enter amount of SOL"
-                  min="0"
-                  step="0.01"
-                />
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">APY</span>
+                <span className="font-medium">{stakingStats?.apy || 0}%</span>
               </div>
-              <Button
-                className="w-full"
-                onClick={handleStake}
-                disabled={isPurchasingAndStaking || !stakeAmount}
-              >
-                {isPurchasingAndStaking ? (
-                  'Processing...'
-                ) : (
-                  <>
-                    <ArrowUpRight className="mr-2 h-4 w-4" />
-                    Stake SOL
-                  </>
-                )}
-              </Button>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Total Rewards</span>
+                <span className="font-medium">{stakingStats?.totalRewards || 0} SOL</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Staking Duration</span>
+                <span className="font-medium">{stakingStats?.stakingDuration || '0 days'}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* Balances */}
         <Card>
           <CardHeader>
-            <CardTitle>Unstake mSOL</CardTitle>
+            <CardTitle>Your Balances</CardTitle>
+            <CardDescription>Current SOL and mSOL balances</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">SOL Balance</span>
+                <span className="font-medium">{solBalance?.toFixed(4) || 0} SOL</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">mSOL Balance</span>
+                <span className="font-medium">{mSolBalance?.toFixed(4) || 0} mSOL</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Stake SOL */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Stake SOL</CardTitle>
+            <CardDescription>Convert your SOL to mSOL to earn rewards</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <Input
+                  type="number"
+                  placeholder="Amount in SOL"
+                  value={stakeAmount}
+                  onChange={(e) => setStakeAmount(e.target.value)}
+                  min="0"
+                  step="0.1"
+                />
+                <Button
+                  onClick={() => stakeSol(Number(stakeAmount))}
+                  disabled={isStaking || !stakeAmount || Number(stakeAmount) <= 0}
+                >
+                  {isStaking ? 'Staking...' : 'Stake'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Unstake SOL */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Unstake SOL</CardTitle>
             <CardDescription>Convert your mSOL back to SOL</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="unstake-amount">Amount to Unstake</Label>
+              <div className="flex gap-4">
                 <Input
-                  id="unstake-amount"
                   type="number"
+                  placeholder="Amount in mSOL"
                   value={unstakeAmount}
                   onChange={(e) => setUnstakeAmount(e.target.value)}
-                  placeholder="Enter amount of mSOL"
                   min="0"
-                  step="0.01"
+                  step="0.1"
                 />
-              </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleUnstake}
-                disabled={isUnstaking || !unstakeAmount}
-              >
-                {isUnstaking ? (
-                  'Processing...'
-                ) : (
-                  <>
-                    <ArrowDownRight className="mr-2 h-4 w-4" />
-                    Unstake mSOL
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Staking Info</CardTitle>
-            <CardDescription>Current staking statistics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Current APY</p>
-                <p className="font-medium">{marinadeData?.apy || 0}%</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Total Staked</p>
-                <p className="font-medium">{marinadeData?.totalStaked || 0} SOL</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Your Stake</p>
-                <p className="font-medium">{marinadeData?.msolBalance || 0} mSOL</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Rewards</CardTitle>
-            <CardDescription>Your staking rewards</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Total Rewards</p>
-                <p className="font-medium">{marinadeData?.totalRewards || 0} SOL</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Daily Rewards</p>
-                <p className="font-medium">{marinadeData?.dailyRewards || 0} SOL</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Next Reward</p>
-                <p className="font-medium">{marinadeData?.nextReward || '0 days'}</p>
+                <Button
+                  onClick={() => unstakeSol(Number(unstakeAmount))}
+                  disabled={isUnstaking || !unstakeAmount || Number(unstakeAmount) <= 0}
+                >
+                  {isUnstaking ? 'Unstaking...' : 'Unstake'}
+                </Button>
               </div>
             </div>
           </CardContent>

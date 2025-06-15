@@ -1,119 +1,66 @@
 'use client';
 
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useMarinadeStaking } from '@/hooks/use-marinade-staking';
+import { useDevnetStaking } from '@/hooks/use-devnet-staking';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+const WalletMultiButton = dynamic(
+  async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
+  { ssr: false }
+);
 
 export default function DashboardPage() {
   const { publicKey } = useWallet();
-  const { solBalance, mSolBalance, marinadeState } = useMarinadeStaking();
+  const { solBalance, mSolBalance } = useDevnetStaking();
 
   if (!publicKey) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <h1 className="text-2xl font-bold">Welcome to Buy now Pay later</h1>
-        <p className="text-muted-foreground">Please connect your wallet to continue</p>
+        <h2 className="text-2xl font-bold">Connect your wallet to view your dashboard</h2>
+        <WalletMultiButton />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 px-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <div className="flex items-center space-x-4">
-          <Button asChild>
-            <Link href="/stake">
-              <ArrowUpRight className="mr-2 h-4 w-4" />
-              Stake SOL
-            </Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/payment">
-              <ArrowDownRight className="mr-2 h-4 w-4" />
-              Buy SOL
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Balances */}
         <Card>
           <CardHeader>
-            <CardTitle>SOL Balance</CardTitle>
-            <CardDescription>Your current SOL balance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{solBalance?.toFixed(4) || 0} SOL</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>mSOL Balance</CardTitle>
-            <CardDescription>Your staked SOL in mSOL</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{mSolBalance?.toFixed(4) || 0} mSOL</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Value</CardTitle>
-            <CardDescription>Combined value of SOL and mSOL</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {((solBalance || 0) + (mSolBalance || 0)).toFixed(4)} SOL
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Your latest transactions</CardDescription>
+            <CardTitle>Your Balances</CardTitle>
+            <CardDescription>Current SOL and mSOL balances</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {marinadeState?.recentTransactions?.map((tx, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{tx.type}</p>
-                    <p className="text-sm text-muted-foreground">{tx.date}</p>
-                  </div>
-                  <p className="font-medium">{tx.amount} SOL</p>
-                </div>
-              ))}
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">SOL Balance</span>
+                <span className="font-medium">{solBalance?.toFixed(4) || 0} SOL</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">mSOL Balance</span>
+                <span className="font-medium">{mSolBalance?.toFixed(4) || 0} mSOL</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Total Value</span>
+                <span className="font-medium">
+                  {((solBalance || 0) + (mSolBalance || 0)).toFixed(4)} SOL
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* Recent Transactions */}
         <Card>
           <CardHeader>
-            <CardTitle>Staking Stats</CardTitle>
-            <CardDescription>Your staking performance</CardDescription>
+            <CardTitle>Recent Transactions</CardTitle>
+            <CardDescription>Your latest staking activities</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">APY</p>
-                <p className="font-medium">{marinadeState?.apy || 0}%</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Total Rewards</p>
-                <p className="font-medium">{marinadeState?.totalRewards || 0} SOL</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground">Staking Duration</p>
-                <p className="font-medium">{marinadeState?.stakingDuration || '0 days'}</p>
-              </div>
+              <p className="text-sm text-muted-foreground">No recent transactions</p>
             </div>
           </CardContent>
         </Card>

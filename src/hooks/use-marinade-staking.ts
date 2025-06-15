@@ -6,20 +6,42 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Marinade, MarinadeConfig } from '@marinade.finance/marinade-ts-sdk';
 import { toast } from 'sonner';
 import { useSolPurchase } from './use-sol-purchase';
+import { MarinadeService } from '@/lib/marinade-service';
 
-export const useMarinadeStaking = () => {
+export function useMarinadeStaking() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   const queryClient = useQueryClient();
   const { purchaseSol, isPurchasing } = useSolPurchase();
+  const marinadeService = new MarinadeService(connection);
 
-  // Query to get user's SOL balance
+  // Query for SOL balance
   const { data: solBalance } = useQuery({
-    queryKey: ['solBalance', publicKey?.toString()],
+    queryKey: ['solBalance', publicKey?.toBase58()],
     queryFn: async () => {
       if (!publicKey) return 0;
       const balance = await connection.getBalance(publicKey);
       return balance / LAMPORTS_PER_SOL;
+    },
+    enabled: !!publicKey,
+  });
+
+  // Query for Marinade staking info
+  const { data: marinadeState } = useQuery({
+    queryKey: ['marinadeState', publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey) return null;
+      return marinadeService.getStakingInfo(publicKey);
+    },
+    enabled: !!publicKey,
+  });
+
+  // Query for recent transactions
+  const { data: recentTransactions } = useQuery({
+    queryKey: ['recentTransactions', publicKey?.toBase58()],
+    queryFn: async () => {
+      if (!publicKey) return [];
+      return marinadeService.getRecentTransactions(publicKey);
     },
     enabled: !!publicKey,
   });
@@ -49,61 +71,41 @@ export const useMarinadeStaking = () => {
     enabled: !!publicKey && !!marinade.data,
   });
 
-  // Query to get Marinade state
-  const { data: marinadeState } = useQuery({
-    queryKey: ['marinadeState'],
-    queryFn: async () => {
-      if (!marinade.data) return null;
-      return await marinade.data.getState();
-    },
-    enabled: !!marinade.data,
-  });
-
-  // Mutation to purchase SOL and stake it
-  const purchaseAndStakeMutation = useMutation({
-    mutationFn: async ({ amount, paymentMethod }: { amount: number; paymentMethod: any }) => {
-      if (!publicKey || !marinade.data) throw new Error('Wallet not connected');
-
-      // First, purchase SOL using credit card
-      await purchaseSol({ amount, paymentMethod });
-
-      // Then, stake the purchased SOL
-      const { transaction, associatedMSolTokenAccountAddress } = await marinade.data.deposit(amount);
-
-      const signature = await sendTransaction(transaction, connection);
-      await connection.confirmTransaction(signature);
-
-      toast.success(`Successfully purchased and staked ${amount} SOL`);
-      return signature;
+  // Mutation for staking SOL
+  const stakeMutation = useMutation({
+    mutationFn: async (amount: number) => {
+      if (!publicKey) throw new Error('Wallet not connected');
+      const instruction = await marinadeService.stakeSol(publicKey, amount);
+      const tx = await sendTransaction(instruction, []);
+      await connection.confirmTransaction(tx);
+      return tx;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mSolBalance'] });
       queryClient.invalidateQueries({ queryKey: ['solBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['marinadeState'] });
+      toast.success('Successfully staked SOL');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to purchase and stake SOL');
+      toast.error('Failed to stake SOL: ' + error.message);
     },
   });
 
-  // Mutation to unstake mSOL and get SOL back
+  // Mutation for unstaking SOL
   const unstakeMutation = useMutation({
     mutationFn: async (amount: number) => {
-      if (!publicKey || !marinade.data) throw new Error('Wallet not connected');
-
-      const { transaction } = await marinade.data.liquidUnstake(amount);
-
-      const signature = await sendTransaction(transaction, connection);
-      await connection.confirmTransaction(signature);
-
-      toast.success(`Successfully unstaked ${amount} mSOL and received SOL`);
-      return signature;
+      if (!publicKey) throw new Error('Wallet not connected');
+      const instruction = await marinadeService.unstakeSol(publicKey, amount);
+      const tx = await sendTransaction(instruction, []);
+      await connection.confirmTransaction(tx);
+      return tx;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mSolBalance'] });
       queryClient.invalidateQueries({ queryKey: ['solBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['marinadeState'] });
+      toast.success('Successfully unstaked SOL');
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to unstake mSOL');
+      toast.error('Failed to unstake SOL: ' + error.message);
     },
   });
 
@@ -111,10 +113,13 @@ export const useMarinadeStaking = () => {
     solBalance,
     mSolBalance,
     isLoadingBalance,
-    marinadeState,
-    purchaseAndStake: purchaseAndStakeMutation.mutate,
-    isPurchasingAndStaking: purchaseAndStakeMutation.isPending,
+    marinadeState: {
+      ...marinadeState,
+      recentTransactions,
+    },
+    stake: stakeMutation.mutate,
+    isStaking: stakeMutation.isPending,
     unstake: unstakeMutation.mutate,
     isUnstaking: unstakeMutation.isPending,
   };
-};
+}
