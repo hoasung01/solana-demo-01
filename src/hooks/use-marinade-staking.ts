@@ -1,7 +1,7 @@
 'use client';
 
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { Connection, PublicKey, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Marinade, MarinadeConfig } from '@marinade.finance/marinade-ts-sdk';
 import { toast } from 'sonner';
@@ -12,6 +12,17 @@ export const useMarinadeStaking = () => {
   const { publicKey, sendTransaction } = useWallet();
   const queryClient = useQueryClient();
   const { purchaseSol, isPurchasing } = useSolPurchase();
+
+  // Query to get user's SOL balance
+  const { data: solBalance } = useQuery({
+    queryKey: ['solBalance', publicKey?.toString()],
+    queryFn: async () => {
+      if (!publicKey) return 0;
+      const balance = await connection.getBalance(publicKey);
+      return balance / LAMPORTS_PER_SOL;
+    },
+    enabled: !!publicKey,
+  });
 
   // Initialize Marinade SDK
   const marinade = useQuery({
@@ -31,7 +42,7 @@ export const useMarinadeStaking = () => {
   const { data: mSolBalance, isLoading: isLoadingBalance } = useQuery({
     queryKey: ['mSolBalance', publicKey?.toString()],
     queryFn: async () => {
-      if (!publicKey || !marinade.data) return null;
+      if (!publicKey || !marinade.data) return 0;
       const balance = await marinade.data.getMSolBalance(publicKey);
       return balance;
     },
@@ -67,6 +78,7 @@ export const useMarinadeStaking = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mSolBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['solBalance'] });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to purchase and stake SOL');
@@ -88,6 +100,7 @@ export const useMarinadeStaking = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mSolBalance'] });
+      queryClient.invalidateQueries({ queryKey: ['solBalance'] });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to unstake mSOL');
@@ -95,6 +108,7 @@ export const useMarinadeStaking = () => {
   });
 
   return {
+    solBalance,
     mSolBalance,
     isLoadingBalance,
     marinadeState,

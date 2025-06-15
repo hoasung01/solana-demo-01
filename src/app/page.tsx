@@ -9,7 +9,7 @@ import Link from 'next/link';
 
 export default function DashboardPage() {
   const { publicKey } = useWallet();
-  const { data: marinadeData } = useMarinadeStaking();
+  const { solBalance, mSolBalance, marinadeState } = useMarinadeStaking();
 
   if (!publicKey) {
     return (
@@ -47,7 +47,7 @@ export default function DashboardPage() {
             <CardDescription>Your current SOL balance</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{marinadeData?.solBalance || 0} SOL</p>
+            <p className="text-2xl font-bold">{solBalance?.toFixed(4) || 0} SOL</p>
           </CardContent>
         </Card>
 
@@ -57,7 +57,7 @@ export default function DashboardPage() {
             <CardDescription>Your staked SOL in mSOL</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{marinadeData?.msolBalance || 0} mSOL</p>
+            <p className="text-2xl font-bold">{mSolBalance?.toFixed(4) || 0} mSOL</p>
           </CardContent>
         </Card>
 
@@ -68,7 +68,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {(marinadeData?.solBalance || 0) + (marinadeData?.msolBalance || 0)} SOL
+              {((solBalance || 0) + (mSolBalance || 0)).toFixed(4)} SOL
             </p>
           </CardContent>
         </Card>
@@ -82,7 +82,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {marinadeData?.recentTransactions?.map((tx, index) => (
+              {marinadeState?.recentTransactions?.map((tx, index) => (
                 <div key={index} className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">{tx.type}</p>
@@ -104,15 +104,15 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-muted-foreground">APY</p>
-                <p className="font-medium">{marinadeData?.apy || 0}%</p>
+                <p className="font-medium">{marinadeState?.apy || 0}%</p>
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-muted-foreground">Total Rewards</p>
-                <p className="font-medium">{marinadeData?.totalRewards || 0} SOL</p>
+                <p className="font-medium">{marinadeState?.totalRewards || 0} SOL</p>
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-muted-foreground">Staking Duration</p>
-                <p className="font-medium">{marinadeData?.stakingDuration || '0 days'}</p>
+                <p className="font-medium">{marinadeState?.stakingDuration || '0 days'}</p>
               </div>
             </div>
           </CardContent>
