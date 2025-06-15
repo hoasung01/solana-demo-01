@@ -15,9 +15,9 @@ export function MainNav() {
   }, []);
 
   return (
-    <div className="mr-4 hidden md:flex">
+    <div className="mr-4 hidden md:flex w-full px-6">
       <Link href="/" className="mr-6 flex items-center space-x-2">
-        <span className="hidden font-bold sm:inline-block">mSOL Payments</span>
+        <span className="hidden font-bold sm:inline-block">Buy now Pay later</span>
       </Link>
       <nav className="flex items-center space-x-6 text-sm font-medium">
         <Link

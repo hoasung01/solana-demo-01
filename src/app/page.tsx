@@ -14,14 +14,14 @@ export default function DashboardPage() {
   if (!publicKey) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <h1 className="text-2xl font-bold">Welcome to Solana Demo</h1>
+        <h1 className="text-2xl font-bold">Welcome to Buy now Pay later</h1>
         <p className="text-muted-foreground">Please connect your wallet to continue</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <div className="flex items-center space-x-4">
