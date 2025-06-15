@@ -5,11 +5,13 @@ import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Marinade, MarinadeConfig } from '@marinade.finance/marinade-ts-sdk';
 import { toast } from 'sonner';
+import { useSolPurchase } from './use-sol-purchase';
 
 export const useMarinadeStaking = () => {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   const queryClient = useQueryClient();
+  const { purchaseSol, isPurchasing } = useSolPurchase();
 
   // Initialize Marinade SDK
   const marinade = useQuery({
@@ -46,24 +48,28 @@ export const useMarinadeStaking = () => {
     enabled: !!marinade.data,
   });
 
-  // Mutation to stake SOL and get mSOL
-  const stakeMutation = useMutation({
-    mutationFn: async (amount: number) => {
+  // Mutation to purchase SOL and stake it
+  const purchaseAndStakeMutation = useMutation({
+    mutationFn: async ({ amount, paymentMethod }: { amount: number; paymentMethod: any }) => {
       if (!publicKey || !marinade.data) throw new Error('Wallet not connected');
 
+      // First, purchase SOL using credit card
+      await purchaseSol({ amount, paymentMethod });
+
+      // Then, stake the purchased SOL
       const { transaction, associatedMSolTokenAccountAddress } = await marinade.data.deposit(amount);
 
       const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature);
 
-      toast.success(`Successfully staked ${amount} SOL and received mSOL`);
+      toast.success(`Successfully purchased and staked ${amount} SOL`);
       return signature;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mSolBalance'] });
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to stake SOL');
+      toast.error(error instanceof Error ? error.message : 'Failed to purchase and stake SOL');
     },
   });
 
@@ -92,8 +98,8 @@ export const useMarinadeStaking = () => {
     mSolBalance,
     isLoadingBalance,
     marinadeState,
-    stake: stakeMutation.mutate,
-    isStaking: stakeMutation.isPending,
+    purchaseAndStake: purchaseAndStakeMutation.mutate,
+    isPurchasingAndStaking: purchaseAndStakeMutation.isPending,
     unstake: unstakeMutation.mutate,
     isUnstaking: unstakeMutation.isPending,
   };

@@ -18,21 +18,25 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 #[derive(Debug)]
 pub struct StakePool {
     pub total_staked: u64,        // Tổng số SOL đã stake
+    pub total_msol: u64,          // Tổng số mSOL đã mint
     pub reward_rate: u64,         // Tỷ lệ lãi suất hàng năm (%)
     pub last_update_time: i64,    // Thời điểm cập nhật lãi cuối cùng
     pub authority: Pubkey,
+    pub msol_mint: Pubkey,        // Địa chỉ của mSOL token mint
     pub linked_cards: std::collections::BTreeMap<Pubkey, CardInfo>,
 }
 
 impl StakePool {
-    pub const LEN: usize = 8 + 8 + 8 + 32 + 1000; // u64 + u64 + i64 + 32 bytes for authority + 1000 bytes for linked_cards
+    pub const LEN: usize = 8 + 8 + 8 + 8 + 32 + 32 + 1000; // u64 + u64 + u64 + i64 + 32 bytes for authority + 32 bytes for msol_mint + 1000 bytes for linked_cards
 
     pub fn new() -> Self {
         Self {
             total_staked: 0,
+            total_msol: 0,
             reward_rate: 5,
             last_update_time: 0,
             authority: Pubkey::default(),
+            msol_mint: Pubkey::default(),
             linked_cards: std::collections::BTreeMap::new(),
         }
     }
@@ -44,16 +48,20 @@ impl StakePool {
 
         // Serialize total_staked (u64)
         data[0..8].copy_from_slice(&self.total_staked.to_le_bytes());
+        // Serialize total_msol (u64)
+        data[8..16].copy_from_slice(&self.total_msol.to_le_bytes());
         // Serialize reward_rate (u64)
-        data[8..16].copy_from_slice(&self.reward_rate.to_le_bytes());
+        data[16..24].copy_from_slice(&self.reward_rate.to_le_bytes());
         // Serialize last_update_time (i64)
-        data[16..24].copy_from_slice(&self.last_update_time.to_le_bytes());
+        data[24..32].copy_from_slice(&self.last_update_time.to_le_bytes());
         // Serialize authority (Pubkey)
-        data[24..56].copy_from_slice(&self.authority.to_bytes());
+        data[32..64].copy_from_slice(&self.authority.to_bytes());
+        // Serialize msol_mint (Pubkey)
+        data[64..96].copy_from_slice(&self.msol_mint.to_bytes());
         // Serialize linked_cards (BTreeMap<Pubkey, CardInfo>)
         for (key, card_info) in &self.linked_cards {
-            data[56..64].copy_from_slice(&key.to_bytes());
-            card_info.serialize(&mut data[64..])?;
+            data[96..128].copy_from_slice(&key.to_bytes());
+            card_info.serialize(&mut data[128..])?;
         }
 
         Ok(())
@@ -65,11 +73,13 @@ impl StakePool {
         }
 
         let total_staked = u64::from_le_bytes(data[0..8].try_into().unwrap());
-        let reward_rate = u64::from_le_bytes(data[8..16].try_into().unwrap());
-        let last_update_time = i64::from_le_bytes(data[16..24].try_into().unwrap());
-        let authority = Pubkey::from_bytes(data[24..56].try_into().unwrap());
+        let total_msol = u64::from_le_bytes(data[8..16].try_into().unwrap());
+        let reward_rate = u64::from_le_bytes(data[16..24].try_into().unwrap());
+        let last_update_time = i64::from_le_bytes(data[24..32].try_into().unwrap());
+        let authority = Pubkey::from_bytes(data[32..64].try_into().unwrap());
+        let msol_mint = Pubkey::from_bytes(data[64..96].try_into().unwrap());
         let mut linked_cards = std::collections::BTreeMap::new();
-        let mut offset = 56;
+        let mut offset = 96;
         while offset < data.len() {
             let key = Pubkey::from_bytes(data[offset..offset+32].try_into().unwrap());
             let card_info = CardInfo::deserialize(&data[offset+32..])?;
@@ -79,9 +89,11 @@ impl StakePool {
 
         Ok(Self {
             total_staked,
+            total_msol,
             reward_rate,
             last_update_time,
             authority,
+            msol_mint,
             linked_cards,
         })
     }
@@ -90,13 +102,13 @@ impl StakePool {
 /// Các lệnh có thể thực hiện với Stake Pool
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub enum StakePoolInstruction {
-    Initialize,                    // Khởi tạo stake pool
-    Stake { amount: u64 },        // Stake SOL với số lượng cụ thể
-    Unstake { amount: u64 },      // Rút SOL đã stake
-    ClaimRewards,                 // Nhận lãi đã tích lũy
-    LinkCard { card_id: String },  // Liên kết thẻ tín dụng
-    UnlinkCard { card_id: String },// Bỏ liên kết thẻ tín dụng
-    ProcessBNPL { amount: u64 },  // Xử lý giao dịch BNPL
+    Initialize { msol_mint: Pubkey },  // Khởi tạo stake pool với mSOL mint
+    Stake { amount: u64 },            // Stake SOL và nhận mSOL
+    Unstake { amount: u64 },          // Rút SOL bằng cách burn mSOL
+    ClaimRewards,                     // Nhận lãi đã tích lũy
+    LinkCard { card_id: String },     // Liên kết thẻ tín dụng
+    UnlinkCard { card_id: String },   // Bỏ liên kết thẻ tín dụng
+    ProcessBNPL { amount: u64 },      // Xử lý giao dịch BNPL
 }
 
 // Đánh dấu điểm vào của chương trình
@@ -126,7 +138,12 @@ pub fn process_instruction(
     match instruction {
         0 => {
             msg!("Instruction: Initialize");
-            process_initialize(program_id, accounts)
+            let msol_mint = if instruction_data.len() > 9 {
+                Pubkey::new(&instruction_data[9..41])
+            } else {
+                return Err(ProgramError::InvalidInstructionData);
+            };
+            process_initialize(program_id, accounts, msol_mint)
         }
         1 => {
             msg!("Instruction: Stake");
@@ -165,9 +182,11 @@ pub fn find_stake_pool_address(program_id: &Pubkey) -> (Pubkey, u8) {
 fn process_initialize(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
+    msol_mint: Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let stake_pool_account = next_account_info(account_info_iter)?;
+    let authority_account = next_account_info(account_info_iter)?;
 
     // Kiểm tra xem đây có phải là PDA của stake pool không
     let (expected_stake_pool, _) = find_stake_pool_address(program_id);
@@ -180,8 +199,15 @@ fn process_initialize(
         return Err(ProgramError::IncorrectProgramId);
     }
 
+    // Kiểm tra quyền của authority
+    if !authority_account.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
     // Tạo stake pool mới với các giá trị ban đầu
-    let stake_pool = StakePool::new();
+    let mut stake_pool = StakePool::new();
+    stake_pool.authority = *authority_account.key;
+    stake_pool.msol_mint = msol_mint;
 
     // Lưu dữ liệu vào tài khoản
     let mut data = stake_pool_account.data.borrow_mut();
@@ -189,7 +215,7 @@ fn process_initialize(
     Ok(())
 }
 
-/// Xử lý việc stake SOL
+/// Xử lý việc stake SOL và mint mSOL
 fn process_stake(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -198,6 +224,9 @@ fn process_stake(
     let account_info_iter = &mut accounts.iter();
     let stake_pool_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
+    let msol_mint_account = next_account_info(account_info_iter)?;
+    let user_msol_account = next_account_info(account_info_iter)?;
+    let pool_msol_account = next_account_info(account_info_iter)?;
 
     // Kiểm tra xem đây có phải là PDA của stake pool không
     let (expected_stake_pool, _) = find_stake_pool_address(program_id);
@@ -213,6 +242,11 @@ fn process_stake(
     // Đọc thông tin stake pool hiện tại
     let data = stake_pool_account.data.borrow();
     let mut stake_pool = StakePool::deserialize(&data)?;
+
+    // Kiểm tra mSOL mint
+    if msol_mint_account.key != &stake_pool.msol_mint {
+        return Err(ProgramError::InvalidAccountData);
+    }
 
     // Chuyển SOL từ người dùng vào stake pool
     invoke(
@@ -224,8 +258,30 @@ fn process_stake(
         &[user_account.clone(), stake_pool_account.clone()],
     )?;
 
-    // Cập nhật tổng số SOL đã stake
+    // Tính số lượng mSOL cần mint (1:1 với SOL)
+    let msol_amount = amount;
+
+    // Mint mSOL cho người dùng
+    invoke(
+        &spl_token::instruction::mint_to(
+            &spl_token::id(),
+            msol_mint_account.key,
+            user_msol_account.key,
+            stake_pool_account.key,
+            &[],
+            msol_amount,
+        )?,
+        &[
+            msol_mint_account.clone(),
+            user_msol_account.clone(),
+            stake_pool_account.clone(),
+        ],
+    )?;
+
+    // Cập nhật tổng số SOL đã stake và mSOL đã mint
     stake_pool.total_staked = stake_pool.total_staked.checked_add(amount)
+        .ok_or(ProgramError::Custom(0))?;
+    stake_pool.total_msol = stake_pool.total_msol.checked_add(msol_amount)
         .ok_or(ProgramError::Custom(0))?;
 
     // Lưu trạng thái mới
@@ -234,15 +290,17 @@ fn process_stake(
     Ok(())
 }
 
-/// Xử lý việc rút SOL đã stake
+/// Xử lý việc rút SOL bằng cách burn mSOL
 fn process_unstake(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    amount: u64,                  // Số lượng SOL muốn rút
+    amount: u64,                  // Số lượng mSOL muốn burn để rút SOL
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let stake_pool_account = next_account_info(account_info_iter)?;
     let user_account = next_account_info(account_info_iter)?;
+    let msol_mint_account = next_account_info(account_info_iter)?;
+    let user_msol_account = next_account_info(account_info_iter)?;
 
     // Kiểm tra xem đây có phải là PDA của stake pool không
     let (expected_stake_pool, _) = find_stake_pool_address(program_id);
@@ -259,17 +317,42 @@ fn process_unstake(
     let data = stake_pool_account.data.borrow();
     let mut stake_pool = StakePool::deserialize(&data)?;
 
-    // Kiểm tra số dư đủ
-    if stake_pool.total_staked < amount {
-        return Err(ProgramError::InsufficientFunds);
+    // Kiểm tra mSOL mint
+    if msol_mint_account.key != &stake_pool.msol_mint {
+        return Err(ProgramError::InvalidAccountData);
     }
 
-    // Chuyển SOL từ stake pool về người dùng
-    **stake_pool_account.try_borrow_mut_lamports()? -= amount;
-    **user_account.try_borrow_mut_lamports()? += amount;
+    // Burn mSOL từ người dùng
+    invoke(
+        &spl_token::instruction::burn(
+            &spl_token::id(),
+            user_msol_account.key,
+            msol_mint_account.key,
+            user_account.key,
+            &[],
+            amount,
+        )?,
+        &[
+            user_msol_account.clone(),
+            msol_mint_account.clone(),
+            user_account.clone(),
+        ],
+    )?;
 
-    // Cập nhật tổng số SOL đã stake
+    // Chuyển SOL từ stake pool về cho người dùng
+    invoke(
+        &system_instruction::transfer(
+            stake_pool_account.key,
+            user_account.key,
+            amount,
+        ),
+        &[stake_pool_account.clone(), user_account.clone()],
+    )?;
+
+    // Cập nhật tổng số SOL đã stake và mSOL đã mint
     stake_pool.total_staked = stake_pool.total_staked.checked_sub(amount)
+        .ok_or(ProgramError::Custom(0))?;
+    stake_pool.total_msol = stake_pool.total_msol.checked_sub(amount)
         .ok_or(ProgramError::Custom(0))?;
 
     // Lưu trạng thái mới

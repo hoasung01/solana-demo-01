@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { useStripePayment } from '@/hooks/use-stripe-payment';
+import { useMarinadeStaking } from '@/hooks/use-marinade-staking';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ export const PaymentForm = () => {
   const [amount, setAmount] = useState('');
   const stripe = useStripe();
   const elements = useElements();
-  const { handlePayment, isLoading } = useStripePayment();
+  const { purchaseAndStake, isPurchasingAndStaking } = useMarinadeStaking();
 
   if (!stripe || !elements) {
     return (
@@ -41,23 +41,25 @@ export const PaymentForm = () => {
       return;
     }
 
-    const success = await handlePayment(parseFloat(amount), paymentMethod);
-    if (success) {
-      setAmount('');
-      cardElement.clear();
-    }
+    await purchaseAndStake({
+      amount: parseFloat(amount),
+      paymentMethod
+    });
+
+    setAmount('');
+    cardElement.clear();
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-md mx-auto p-4">
       <div className="space-y-2">
-        <Label htmlFor="amount">Amount (USD)</Label>
+        <Label htmlFor="amount">Amount (SOL)</Label>
         <Input
           id="amount"
           type="number"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          placeholder="Enter amount"
+          placeholder="Enter amount of SOL to purchase and stake"
           required
           min="0"
           step="0.01"
@@ -88,10 +90,10 @@ export const PaymentForm = () => {
 
       <Button
         type="submit"
-        disabled={isLoading}
+        disabled={isPurchasingAndStaking}
         className="w-full"
       >
-        {isLoading ? 'Processing...' : 'Pay Now'}
+        {isPurchasingAndStaking ? 'Processing...' : 'Purchase and Stake SOL'}
       </Button>
     </form>
   );

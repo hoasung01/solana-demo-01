@@ -1,68 +1,61 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Copy } from 'lucide-react';
+import { CreditCard, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export const TestCardInfo = () => {
-  const [copied, setCopied] = useState(false);
-
-  const testCards = [
-    {
-      name: 'Successful Payment',
-      number: '4242 4242 4242 4242',
-      description: 'Use this card for successful payments',
-    },
-    {
-      name: 'Failed Payment',
-      number: '4000 0000 0000 0002',
-      description: 'Use this card to test failed payments',
-    },
-    {
-      name: '3D Secure Required',
-      number: '4000 0000 0000 3220',
-      description: 'Use this card to test 3D Secure authentication',
-    },
-  ];
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
-    <Card className="w-full max-w-md mx-auto mt-8">
-      <CardHeader>
-        <CardTitle className="text-lg">Test Card Information</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {testCards.map((card) => (
-            <div key={card.number} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">{card.name}</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToClipboard(card.number)}
-                  className="h-8 w-8 p-0"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">{card.description}</p>
-              <p className="text-sm font-mono bg-muted p-2 rounded">
-                {card.number}
-              </p>
-            </div>
-          ))}
-          <p className="text-sm text-muted-foreground mt-4">
-            For all test cards, use any future expiration date and any 3-digit CVC.
+    <div className="space-y-4">
+      <Alert>
+        <CreditCard className="h-4 w-4" />
+        <AlertTitle>Test Card Information</AlertTitle>
+        <AlertDescription>
+          Use these test card numbers in the sandbox environment:
+        </AlertDescription>
+      </Alert>
+
+      <div className="space-y-2">
+        <div className="p-4 border rounded-lg">
+          <h3 className="font-medium mb-2">Successful Payment</h3>
+          <p className="text-sm text-muted-foreground">
+            Card Number: 4242 4242 4242 4242
+            <br />
+            Expiry: Any future date
+            <br />
+            CVC: Any 3 digits
           </p>
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="p-4 border rounded-lg">
+          <h3 className="font-medium mb-2">Payment Requires Authentication</h3>
+          <p className="text-sm text-muted-foreground">
+            Card Number: 4000 0025 0000 3155
+            <br />
+            Expiry: Any future date
+            <br />
+            CVC: Any 3 digits
+          </p>
+        </div>
+
+        <div className="p-4 border rounded-lg">
+          <h3 className="font-medium mb-2">Payment Declined</h3>
+          <p className="text-sm text-muted-foreground">
+            Card Number: 4000 0000 0000 0002
+            <br />
+            Expiry: Any future date
+            <br />
+            CVC: Any 3 digits
+          </p>
+        </div>
+      </div>
+
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Important</AlertTitle>
+        <AlertDescription>
+          These cards only work in test mode. Never use real card numbers in the sandbox environment.
+        </AlertDescription>
+      </Alert>
+    </div>
   );
 };
