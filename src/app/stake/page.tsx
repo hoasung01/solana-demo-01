@@ -1,46 +1,85 @@
 'use client';
 
+import { useState } from 'react';
 import { useDevnetStaking } from '@/hooks/use-devnet-staking';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useState } from 'react';
-import dynamic from 'next/dynamic';
-import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
-
-const WalletMultiButton = dynamic(
-  async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
-  { ssr: false }
-);
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
 
 export default function StakePage() {
   const { publicKey } = useWallet();
-  const { solBalance, mSolBalance, stakingStats, stakeSol, unstakeSol, isStaking, isUnstaking } = useDevnetStaking();
+  const {
+    solBalance,
+    mSolBalance,
+    stakingStats,
+    isLoadingStats,
+    isLoadingBalance,
+    stakeSol,
+    unstakeSol,
+    isStaking,
+    isUnstaking,
+    connected,
+  } = useDevnetStaking();
+
   const [stakeAmount, setStakeAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
-  const [isStakingPending, setIsStakingPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!publicKey) {
+  const handleStake = async () => {
+    try {
+      setError(null);
+      const amount = parseFloat(stakeAmount);
+      if (isNaN(amount) || amount <= 0) {
+        setError('Please enter a valid amount');
+        return;
+      }
+      if (amount > (solBalance || 0)) {
+        setError('Insufficient SOL balance');
+        return;
+      }
+      await stakeSol(amount);
+      setStakeAmount('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to stake SOL');
+    }
+  };
+
+  const handleUnstake = async () => {
+    try {
+      setError(null);
+      const amount = parseFloat(unstakeAmount);
+      if (isNaN(amount) || amount <= 0) {
+        setError('Please enter a valid amount');
+        return;
+      }
+      if (amount > (mSolBalance || 0)) {
+        setError('Insufficient mSOL balance');
+        return;
+      }
+      await unstakeSol(amount);
+      setUnstakeAmount('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unstake SOL');
+    }
+  };
+
+  if (!connected) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <h2 className="text-2xl font-bold">Connect your wallet to start staking</h2>
-        <WalletMultiButton />
+      <div className="container mx-auto py-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Connect Wallet</CardTitle>
+            <CardDescription>Please connect your wallet to start staking</CardDescription>
+          </CardHeader>
+        </Card>
       </div>
     );
   }
-
-  const handleStake = async () => {
-    setIsStakingPending(true);
-    try {
-      await stakeSol(Number(stakeAmount));
-    } catch (error) {
-      console.error('Error staking:', error);
-    } finally {
-      setIsStakingPending(false);
-    }
-  };
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -49,49 +88,75 @@ export default function StakePage() {
         <Card>
           <CardHeader>
             <CardTitle>Staking Stats</CardTitle>
-            <CardDescription>
-              {stakingStats?.hasStaked
-                ? 'Your current staking statistics'
-                : 'Stake SOL to start earning rewards'}
-            </CardDescription>
+            <CardDescription>Your current staking statistics</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Current APY</span>
-                <span className="text-sm font-medium">
-                  {stakingStats?.apyData?.current ? `${stakingStats.apyData.current}%` : '0%'}
-                </span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Current APY</p>
+                  <p className="text-2xl font-bold">
+                    {isLoadingStats ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      `${stakingStats?.currentApy || '0.00'}%`
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">7-Day APY</p>
+                  <p className="text-2xl font-bold">
+                    {isLoadingStats ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      `${stakingStats?.apy7d || '0.00'}%`
+                    )}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">7-Day APY</span>
-                <span className="text-sm font-medium">
-                  {stakingStats?.apyData?.["7d"] ? `${stakingStats.apyData["7d"]}%` : '0%'}
-                </span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">30-Day APY</p>
+                  <p className="text-2xl font-bold">
+                    {isLoadingStats ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      `${stakingStats?.apy30d || '0.00'}%`
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">90-Day APY</p>
+                  <p className="text-2xl font-bold">
+                    {isLoadingStats ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      `${stakingStats?.apy90d || '0.00'}%`
+                    )}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">30-Day APY</span>
-                <span className="text-sm font-medium">
-                  {stakingStats?.apyData?.["30d"] ? `${stakingStats.apyData["30d"]}%` : '0%'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">90-Day APY</span>
-                <span className="text-sm font-medium">
-                  {stakingStats?.apyData?.["90d"] ? `${stakingStats.apyData["90d"]}%` : '0%'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Total Rewards</span>
-                <span className="text-sm font-medium">
-                  {stakingStats?.hasStaked ? `${stakingStats.totalRewards} SOL` : '0 SOL'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Staking Duration</span>
-                <span className="text-sm font-medium">
-                  {stakingStats?.hasStaked ? stakingStats.stakingDuration : 'Not staked yet'}
-                </span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Rewards</p>
+                  <p className="text-2xl font-bold">
+                    {isLoadingStats ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      `${stakingStats?.totalRewards || '0.0000'} SOL`
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Staking Duration</p>
+                  <p className="text-2xl font-bold">
+                    {isLoadingStats ? (
+                      <Skeleton className="h-8 w-24" />
+                    ) : (
+                      stakingStats?.stakingDuration || 'Not staked yet'
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -105,59 +170,55 @@ export default function StakePage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">SOL Balance</span>
-                <span className="font-medium">{solBalance?.toFixed(4) || 0} SOL</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">SOL Balance</span>
+                <span className="text-sm">
+                  {solBalance?.toFixed(4) || '0.0000'} SOL
+                </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">mSOL Balance</span>
-                <span className="font-medium">{mSolBalance?.toFixed(4) || 0} mSOL</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">mSOL Balance</span>
+                <span className="text-sm">
+                  {isLoadingBalance ? (
+                    <Skeleton className="h-4 w-20" />
+                  ) : (
+                    `${mSolBalance?.toFixed(4) || '0.0000'} mSOL`
+                  )}
+                </span>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Stake/Unstake Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Stake SOL */}
         <Card>
           <CardHeader>
             <CardTitle>Stake SOL</CardTitle>
-            <CardDescription>Convert your SOL to mSOL to earn rewards</CardDescription>
+            <CardDescription>Convert your SOL to mSOL to start earning rewards</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="stake-amount">Amount to Stake</Label>
-                <Input
-                  id="stake-amount"
-                  type="number"
-                  placeholder="Enter SOL amount"
-                  value={stakeAmount}
-                  onChange={(e) => setStakeAmount(e.target.value)}
-                  min="0"
-                  step="0.1"
-                />
-              </div>
+              <Input
+                type="number"
+                placeholder="Amount of SOL to stake"
+                value={stakeAmount}
+                onChange={(e) => setStakeAmount(e.target.value)}
+                min="0"
+                step="0.1"
+              />
               <Button
-                className="w-full"
                 onClick={handleStake}
-                disabled={!stakeAmount || isStakingPending}
+                disabled={!stakeAmount || isStaking}
+                className="w-full"
               >
-                {isStakingPending ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Staking...
-                  </div>
-                ) : (
-                  "Stake SOL (Powered by Marinade Finance)"
-                )}
+                {isStaking ? 'Staking...' : 'Stake SOL'}
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Unstake SOL */}
         <Card>
           <CardHeader>
             <CardTitle>Unstake SOL</CardTitle>
@@ -165,26 +226,71 @@ export default function StakePage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex gap-4">
-                <Input
-                  type="number"
-                  placeholder="Amount in mSOL"
-                  value={unstakeAmount}
-                  onChange={(e) => setUnstakeAmount(e.target.value)}
-                  min="0"
-                  step="0.1"
-                />
-                <Button
-                  onClick={() => unstakeSol(Number(unstakeAmount))}
-                  disabled={isUnstaking || !unstakeAmount || Number(unstakeAmount) <= 0}
-                >
-                  {isUnstaking ? 'Unstaking...' : 'Unstake'}
-                </Button>
-              </div>
+              <Input
+                type="number"
+                placeholder="Amount of mSOL to unstake"
+                value={unstakeAmount}
+                onChange={(e) => setUnstakeAmount(e.target.value)}
+                min="0"
+                step="0.1"
+              />
+              <Button
+                onClick={handleUnstake}
+                disabled={!unstakeAmount || isUnstaking}
+                className="w-full"
+              >
+                {isUnstaking ? 'Unstaking...' : 'Unstake SOL'}
+              </Button>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Info Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            About Marinade Finance
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Marinade Finance is a liquid staking protocol on Solana</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </CardTitle>
+          <CardDescription>
+            Learn more about liquid staking with Marinade
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="prose prose-sm dark:prose-invert">
+            <p>
+              Marinade Finance is a liquid staking protocol that allows you to stake your SOL and receive mSOL tokens in return.
+              These mSOL tokens represent your staked SOL position and earn staking rewards automatically.
+            </p>
+            <p>
+              Benefits of staking with Marinade:
+            </p>
+            <ul>
+              <li>Earn staking rewards automatically</li>
+              <li>Use mSOL in DeFi protocols</li>
+              <li>Unstake at any time</li>
+              <li>No minimum stake amount</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

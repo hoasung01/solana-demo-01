@@ -26,12 +26,7 @@ export function useDevnetStaking() {
     queryKey: ["stakingStats", wallet.publicKey?.toBase58()],
     queryFn: async () => {
       if (!wallet.publicKey) throw new Error("Wallet not connected");
-      return marinadeService.getStakingStats({
-        publicKey: wallet.publicKey,
-        signTransaction: wallet.signTransaction,
-        signAllTransactions: wallet.signAllTransactions,
-        sendTransaction: wallet.sendTransaction
-      });
+      return marinadeService.getStakingInfo(wallet.publicKey);
     },
     enabled: !!wallet.publicKey && wallet.connected,
   });

@@ -36,41 +36,57 @@ export class MarinadeService {
     return new Marinade(config);
   }
 
-  private formatApy(apy: number | undefined): string {
-    if (apy === undefined || isNaN(apy)) {
-      return "0.00";
-    }
+  private formatApy(apy: number): string {
     return apy.toFixed(2);
   }
 
   async getStakingInfo(walletAddress: PublicKey) {
     try {
+      const marinade = await this.getMarinade({ publicKey: walletAddress } as WalletAdapter);
+      const state = await marinade.getMarinadeState();
+
       // Get mSOL balance
-      const mSolBalance = await this.connection.getTokenAccountBalance(
-        await this.getMarinade(walletAddress).getMSolTokenAccountAddress(walletAddress)
+      const msolMint = state.state.msolMint;
+      const tokenAccounts = await this.connection.getTokenAccountsByOwner(
+        walletAddress,
+        { mint: msolMint }
       );
+      const mSolBalance = tokenAccounts.value.length > 0
+        ? await this.connection.getTokenAccountBalance(tokenAccounts.value[0].pubkey)
+        : { value: { uiAmount: 0 } };
 
-      // Get APY
-      const apy = await this.getMarinade(walletAddress).getAPY();
+      // Get APY data from Marinade state
+      const currentApy = state.state.apy ? state.state.apy.toNumber() / 100 : 0;
+      const apy7d = state.state.apy7d ? state.state.apy7d.toNumber() / 100 : 0;
+      const apy30d = state.state.apy30d ? state.state.apy30d.toNumber() / 100 : 0;
+      const apy90d = state.state.apy90d ? state.state.apy90d.toNumber() / 100 : 0;
 
-      // Get staking duration
-      const stakingDuration = await this.getMarinade(walletAddress).getStakingDuration(walletAddress);
+      // Calculate staking duration
+      const stakingDuration = mSolBalance.value.uiAmount > 0 ? 'Active' : 'Not staked yet';
 
-      // Get total rewards
-      const totalRewards = await this.getMarinade(walletAddress).getTotalRewards(walletAddress);
+      // Calculate total rewards based on mSOL balance and current APY
+      const totalRewards = mSolBalance.value.uiAmount > 0
+        ? (mSolBalance.value.uiAmount * (currentApy / 100)).toFixed(4)
+        : 0;
 
       return {
         mSolBalance: mSolBalance.value.uiAmount || 0,
-        apy: apy * 100, // Convert to percentage
-        stakingDuration: stakingDuration,
-        totalRewards: totalRewards / LAMPORTS_PER_SOL, // Convert to SOL
+        currentApy: this.formatApy(currentApy),
+        apy7d: this.formatApy(apy7d),
+        apy30d: this.formatApy(apy30d),
+        apy90d: this.formatApy(apy90d),
+        stakingDuration,
+        totalRewards,
       };
     } catch (error) {
       console.error('Error fetching Marinade staking info:', error);
       return {
         mSolBalance: 0,
-        apy: 0,
-        stakingDuration: '0 days',
+        currentApy: '0.00',
+        apy7d: '0.00',
+        apy30d: '0.00',
+        apy90d: '0.00',
+        stakingDuration: 'Not staked yet',
         totalRewards: 0,
       };
     }
