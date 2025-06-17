@@ -97,43 +97,69 @@ export class MarinadeService {
   async getStakingStats(wallet: WalletAdapter) {
     try {
       const marinade = await this.getMarinade(wallet);
-      const state = await marinade.getState();
+      const state = await marinade.getMarinadeState();
+
+      console.log("Marinade state:", state);
 
       return {
-        totalStaked: state.totalStaked.toNumber() / 1e9,
-        totalStakers: state.totalStakers.toNumber(),
-        msolPrice: state.msolPrice.toNumber() / 1e9,
-        msolSupply: state.msolSupply.toNumber() / 1e9,
+        totalStaked: state.state.totalLamportsUnderManagement ? state.state.totalLamportsUnderManagement.toNumber() / 1e9 : 0,
+        totalStakers: state.state.totalStakers ? state.state.totalStakers.toNumber() : 0,
+        msolPrice: state.state.msolPrice ? state.state.msolPrice.toNumber() / 1e9 : 0,
+        msolSupply: state.state.msolSupply ? state.state.msolSupply.toNumber() / 1e9 : 0,
       };
     } catch (error) {
       console.error("Error getting staking stats:", error);
-      throw error;
+      return {
+        totalStaked: 0,
+        totalStakers: 0,
+        msolPrice: 0,
+        msolSupply: 0,
+      };
     }
   }
 
   async getMSolBalance(wallet: WalletAdapter) {
     try {
+      console.log("Getting mSOL balance for wallet:", wallet.publicKey.toBase58());
+
       const marinade = await this.getMarinade(wallet);
-      const state = await marinade.getState();
-      const msolMint = state.msolMint;
+      const state = await marinade.getMarinadeState();
+
+      console.log("Marinade state:", state);
+
+      // Access mSOL mint from the state object
+      const msolMint = state.state.msolMint;
+
+      if (!msolMint) {
+        console.log("No mSOL mint found in Marinade state");
+        return 0;
+      }
+
+      console.log("mSOL mint address:", msolMint.toBase58());
 
       const tokenAccounts = await this.connection.getTokenAccountsByOwner(
         wallet.publicKey,
         { mint: msolMint }
       );
 
+      console.log("Found token accounts:", tokenAccounts.value.length);
+
       if (tokenAccounts.value.length === 0) {
+        console.log("No mSOL token account found for wallet");
         return 0;
       }
+
+      console.log("Token account address:", tokenAccounts.value[0].pubkey.toBase58());
 
       const balance = await this.connection.getTokenAccountBalance(
         tokenAccounts.value[0].pubkey
       );
 
+      console.log("Raw balance data:", balance);
       return balance.value.uiAmount || 0;
     } catch (error) {
       console.error("Error getting mSOL balance:", error);
-      throw error;
+      return 0; // Return 0 instead of throwing error
     }
   }
 
@@ -148,10 +174,13 @@ export class MarinadeService {
       });
 
       const marinade = await this.getMarinade(wallet);
+      console.log("Marinade instance created");
+
       const { transaction } = await marinade.deposit(new BN(amount * 1e9));
+      console.log("Deposit transaction created");
 
       // Get recent blockhash
-      const { blockhash } = await this.connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = wallet.publicKey;
 
@@ -162,8 +191,46 @@ export class MarinadeService {
       const signature = await this.connection.sendRawTransaction(signedTx.serialize());
       console.log("Transaction sent, signature:", signature);
 
-      const confirmation = await this.connection.confirmTransaction(signature);
+      // Wait for confirmation with timeout
+      const confirmation = await this.connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight
+      }, 'confirmed');
+
       console.log("Transaction confirmed:", confirmation);
+
+      // Wait a bit for the token account to be created
+      console.log("Waiting for token account creation...");
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Verify mSOL balance
+      console.log("Checking mSOL balance...");
+      const msolBalance = await this.getMSolBalance(wallet);
+      console.log("mSOL balance after staking:", msolBalance);
+
+      if (msolBalance === 0) {
+        console.warn("mSOL balance is still 0 after staking. This might be due to delayed token account creation.");
+
+        // Try to get the token account address that should have been created
+        const marinadeState = await marinade.getMarinadeState();
+        if (marinadeState && marinadeState.state.msolMint) {
+          const msolMint = marinadeState.state.msolMint;
+          console.log("mSOL mint address:", msolMint.toBase58());
+
+          const tokenAccounts = await this.connection.getTokenAccountsByOwner(
+            wallet.publicKey,
+            { mint: msolMint }
+          );
+          console.log("Token accounts found:", tokenAccounts.value.length);
+
+          if (tokenAccounts.value.length > 0) {
+            console.log("Token account address:", tokenAccounts.value[0].pubkey.toBase58());
+          }
+        } else {
+          console.log("Could not get mSOL mint address from Marinade state");
+        }
+      }
 
       return signature;
     } catch (error) {
