@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import { Label } from '@/components/ui/label';
+import { Loader2 } from 'lucide-react';
 
 const WalletMultiButton = dynamic(
   async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
@@ -18,6 +20,7 @@ export default function StakePage() {
   const { solBalance, mSolBalance, stakingStats, stakeSol, unstakeSol, isStaking, isUnstaking } = useDevnetStaking();
   const [stakeAmount, setStakeAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
+  const [isStakingPending, setIsStakingPending] = useState(false);
 
   if (!publicKey) {
     return (
@@ -28,6 +31,17 @@ export default function StakePage() {
     );
   }
 
+  const handleStake = async () => {
+    setIsStakingPending(true);
+    try {
+      await stakeSol(Number(stakeAmount));
+    } catch (error) {
+      console.error('Error staking:', error);
+    } finally {
+      setIsStakingPending(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -35,21 +49,49 @@ export default function StakePage() {
         <Card>
           <CardHeader>
             <CardTitle>Staking Stats</CardTitle>
-            <CardDescription>Your current staking performance</CardDescription>
+            <CardDescription>
+              {stakingStats?.hasStaked
+                ? 'Your current staking statistics'
+                : 'Stake SOL to start earning rewards'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">APY</span>
-                <span className="font-medium">{stakingStats?.apy || 0}%</span>
+            <div className="grid gap-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Current APY</span>
+                <span className="text-sm font-medium">
+                  {stakingStats?.apyData?.current ? `${stakingStats.apyData.current}%` : '0%'}
+                </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Total Rewards</span>
-                <span className="font-medium">{stakingStats?.totalRewards || 0} SOL</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">7-Day APY</span>
+                <span className="text-sm font-medium">
+                  {stakingStats?.apyData?.["7d"] ? `${stakingStats.apyData["7d"]}%` : '0%'}
+                </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Staking Duration</span>
-                <span className="font-medium">{stakingStats?.stakingDuration || '0 days'}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">30-Day APY</span>
+                <span className="text-sm font-medium">
+                  {stakingStats?.apyData?.["30d"] ? `${stakingStats.apyData["30d"]}%` : '0%'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">90-Day APY</span>
+                <span className="text-sm font-medium">
+                  {stakingStats?.apyData?.["90d"] ? `${stakingStats.apyData["90d"]}%` : '0%'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Total Rewards</span>
+                <span className="text-sm font-medium">
+                  {stakingStats?.hasStaked ? `${stakingStats.totalRewards} SOL` : '0 SOL'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Staking Duration</span>
+                <span className="text-sm font-medium">
+                  {stakingStats?.hasStaked ? stakingStats.stakingDuration : 'Not staked yet'}
+                </span>
               </div>
             </div>
           </CardContent>
@@ -85,22 +127,32 @@ export default function StakePage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="stake-amount">Amount to Stake</Label>
                 <Input
+                  id="stake-amount"
                   type="number"
-                  placeholder="Amount in SOL"
+                  placeholder="Enter SOL amount"
                   value={stakeAmount}
                   onChange={(e) => setStakeAmount(e.target.value)}
                   min="0"
                   step="0.1"
                 />
-                <Button
-                  onClick={() => stakeSol(Number(stakeAmount))}
-                  disabled={isStaking || !stakeAmount || Number(stakeAmount) <= 0}
-                >
-                  {isStaking ? 'Staking...' : 'Stake'}
-                </Button>
               </div>
+              <Button
+                className="w-full"
+                onClick={handleStake}
+                disabled={!stakeAmount || isStakingPending}
+              >
+                {isStakingPending ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Staking...
+                  </div>
+                ) : (
+                  "Stake SOL (Powered by Marinade Finance)"
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>

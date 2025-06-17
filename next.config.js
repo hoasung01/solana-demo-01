@@ -21,6 +21,13 @@ const nextConfig = {
         path: require.resolve('path-browserify'),
         'process/browser': require.resolve('process/browser'),
       };
+
+      config.plugins.push(
+        new webpack.ProvidePlugin({
+          process: 'process/browser',
+          Buffer: ['buffer', 'Buffer'],
+        })
+      );
     }
     return config;
   },

@@ -6,6 +6,13 @@ import {
   mintTo,
 } from '@solana/spl-token';
 
+const MSOL_MINT_ADDRESS = new PublicKey("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So");
+
+interface WalletAdapter {
+  publicKey: PublicKey;
+  sendTransaction: (transaction: Transaction, connection: Connection) => Promise<string>;
+}
+
 export class DevnetStakingService {
   private connection: Connection;
   private mSolMint: PublicKey | null = null;
@@ -15,19 +22,31 @@ export class DevnetStakingService {
     this.connection = connection;
   }
 
-  async initializeMSolMint(admin: PublicKey): Promise<PublicKey> {
-    if (this.mSolMint) return this.mSolMint;
+  async initializeMSolMint(wallet: WalletAdapter): Promise<PublicKey> {
+    try {
+      // Create mSOL mint if it doesn't exist
+      const mint = await createMint(
+        this.connection,
+        wallet.publicKey,
+        wallet.publicKey,
+        wallet.publicKey,
+        9 // 9 decimals like SOL
+      );
 
-    const mSolMint = await createMint(
-      this.connection,
-      admin,
-      admin,
-      null,
-      9
-    );
+      // Create associated token account for the user
+      const tokenAccount = await getOrCreateAssociatedTokenAccount(
+        this.connection,
+        wallet.publicKey,
+        mint,
+        wallet.publicKey
+      );
 
-    this.mSolMint = mSolMint;
-    return mSolMint;
+      this.mSolMint = mint;
+      return mint;
+    } catch (error) {
+      console.error("Error initializing mSOL mint:", error);
+      throw error;
+    }
   }
 
   async getMSolBalance(walletAddress: PublicKey) {
@@ -56,76 +75,98 @@ export class DevnetStakingService {
     return associatedTokenAddress;
   }
 
-  async stakeSol(
-    user: PublicKey,
-    amount: number
-  ): Promise<{ signature: string; mSolAmount: number }> {
-    if (!this.mSolMint) {
-      throw new Error('mSOL mint not initialized');
-    }
+  async stakeSol(wallet: WalletAdapter, amount: number): Promise<string> {
+    try {
+      const transaction = new Transaction();
 
-    const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-      this.connection,
-      user,
-      this.mSolMint,
-      user
-    );
+      // Create mSOL mint if it doesn't exist
+      const mint = await this.initializeMSolMint(wallet);
 
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: user,
-        toPubkey: this.mSolMint,
-        lamports: amount * LAMPORTS_PER_SOL,
-      }),
-      mintTo(
+      // Create associated token account for the user if it doesn't exist
+      const tokenAccount = await getOrCreateAssociatedTokenAccount(
         this.connection,
-        user,
-        this.mSolMint,
-        user,
-        user,
-        amount * LAMPORTS_PER_SOL
-      )
-    );
+        wallet.publicKey,
+        mint,
+        wallet.publicKey
+      );
 
-    const signature = await this.connection.sendTransaction(transaction, [user]);
-    await this.connection.confirmTransaction(signature);
+      // Add transfer instruction
+      transaction.add(
+        SystemProgram.transfer({
+          fromPubkey: wallet.publicKey,
+          toPubkey: mint,
+          lamports: amount * LAMPORTS_PER_SOL,
+        })
+      );
 
-    return {
-      signature,
-      mSolAmount: amount,
-    };
+      // Add mint instruction to mint mSOL tokens
+      transaction.add(
+        mintTo(
+          this.connection,
+          wallet.publicKey,
+          mint,
+          tokenAccount.address,
+          wallet.publicKey,
+          amount * LAMPORTS_PER_SOL
+        )
+      );
+
+      // Send and confirm transaction
+      const signature = await wallet.sendTransaction(transaction, this.connection);
+      await this.connection.confirmTransaction(signature);
+
+      return signature;
+    } catch (error) {
+      console.error("Error staking SOL:", error);
+      throw error;
+    }
   }
 
-  async unstakeSol(
-    user: PublicKey,
-    mSolAmount: number
-  ): Promise<{ signature: string; solAmount: number }> {
-    if (!this.mSolMint) {
-      throw new Error('mSOL mint not initialized');
+  async unstakeSol(wallet: WalletAdapter, amount: number): Promise<string> {
+    try {
+      const transaction = new Transaction();
+
+      // Get mSOL mint
+      const mint = await this.initializeMSolMint(wallet);
+
+      // Get user's mSOL token account
+      const tokenAccount = await getOrCreateAssociatedTokenAccount(
+        this.connection,
+        wallet.publicKey,
+        mint,
+        wallet.publicKey
+      );
+
+      // Add burn instruction to burn mSOL tokens
+      transaction.add(
+        mintTo(
+          this.connection,
+          wallet.publicKey,
+          mint,
+          tokenAccount.address,
+          wallet.publicKey,
+          -amount * LAMPORTS_PER_SOL
+        )
+      );
+
+      // Add transfer instruction to return SOL
+      transaction.add(
+        SystemProgram.transfer({
+          fromPubkey: mint,
+          toPubkey: wallet.publicKey,
+          lamports: amount * LAMPORTS_PER_SOL,
+        })
+      );
+
+      // Send and confirm transaction
+      const signature = await wallet.sendTransaction(transaction, this.connection);
+      await this.connection.confirmTransaction(signature);
+
+      return signature;
+    } catch (error) {
+      console.error("Error unstaking SOL:", error);
+      throw error;
     }
-
-    const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-      this.connection,
-      user,
-      this.mSolMint,
-      user
-    );
-
-    const transaction = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey: this.mSolMint,
-        toPubkey: user,
-        lamports: mSolAmount * LAMPORTS_PER_SOL,
-      })
-    );
-
-    const signature = await this.connection.sendTransaction(transaction, [user]);
-    await this.connection.confirmTransaction(signature);
-
-    return {
-      signature,
-      solAmount: mSolAmount,
-    };
   }
 
   async getStakingInfo(user: PublicKey) {
